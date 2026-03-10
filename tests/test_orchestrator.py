@@ -8,7 +8,14 @@ import pytest
 
 import config
 from agents.builder import BuildResult, ChallengeRepo
-from agents.orchestrator import RepoOutcome, RunResult, run_pipeline
+from agents.orchestrator import (
+    MANIFEST_FILENAME,
+    RepoOutcome,
+    RunResult,
+    load_build_manifest,
+    run_pipeline,
+    save_build_manifest,
+)
 from agents.student_expert import ExpertFeedback
 from agents.student_novice import NoviceFeedback
 from tests.conftest import (
@@ -320,3 +327,145 @@ class TestIterationLog:
         assert "iteration" in entry
         assert "tests_passed" in entry
         assert "novice_clarity" in entry
+
+
+class TestBuildManifest:
+    def test_save_creates_manifest_file(self, tmp_path):
+        build_result = make_build_result()
+        save_build_manifest(build_result, tmp_path, "React")
+        assert (tmp_path / MANIFEST_FILENAME).exists()
+
+    def test_manifest_contains_topic(self, tmp_path):
+        build_result = make_build_result()
+        save_build_manifest(build_result, tmp_path, "React hooks")
+        data = json.loads((tmp_path / MANIFEST_FILENAME).read_text())
+        assert data["topic"] == "React hooks"
+
+    def test_manifest_contains_repo_metadata(self, tmp_path):
+        build_result = make_build_result()
+        save_build_manifest(build_result, tmp_path, "React")
+        data = json.loads((tmp_path / MANIFEST_FILENAME).read_text())
+        repo = data["repos"][0]
+        assert repo["name"] == "click-counter"
+        assert "install_command" in repo
+        assert "test_command" in repo
+        assert "challenges" in repo
+
+    def test_manifest_does_not_contain_file_contents(self, tmp_path):
+        """File contents are on disk; we don't need to serialize them."""
+        build_result = make_build_result()
+        save_build_manifest(build_result, tmp_path, "React")
+        data = json.loads((tmp_path / MANIFEST_FILENAME).read_text())
+        assert "files" not in data["repos"][0]
+
+    def test_load_returns_build_result_and_topic(self, tmp_path):
+        build_result = make_build_result()
+        save_build_manifest(build_result, tmp_path, "React hooks")
+        loaded, topic = load_build_manifest(tmp_path)
+        assert topic == "React hooks"
+        assert len(loaded.repos) == 1
+        assert loaded.repos[0].name == "click-counter"
+
+    def test_load_reconstructs_commands(self, tmp_path):
+        build_result = make_build_result()
+        save_build_manifest(build_result, tmp_path, "React")
+        loaded, _ = load_build_manifest(tmp_path)
+        assert loaded.repos[0].install_command == "npm install"
+        assert loaded.repos[0].test_command == "npm test"
+
+    def test_load_raises_when_manifest_missing(self, tmp_path):
+        with pytest.raises(FileNotFoundError):
+            load_build_manifest(tmp_path)
+
+    def test_pipeline_saves_manifest_on_normal_run(self, tmp_path):
+        out = tmp_path / "output"
+        out.mkdir()
+
+        with patch("agents.orchestrator.build_challenges", return_value=make_build_result()), \
+             patch("agents.orchestrator.write_repos", side_effect=_make_write_repos_side_effect(out)), \
+             patch("agents.orchestrator.expert_evaluate", return_value=make_expert_feedback()), \
+             patch("agents.orchestrator.novice_evaluate", return_value=make_novice_feedback()), \
+             patch("agents.orchestrator.save_reference_solution"):
+            run_pipeline(["Build a counter"], topic="React", output_dir=out)
+
+        assert (out / MANIFEST_FILENAME).exists()
+
+    def test_pipeline_saves_manifest_on_skip_refine(self, tmp_path):
+        out = tmp_path / "output"
+
+        with patch("agents.orchestrator.build_challenges", return_value=make_build_result()), \
+             patch("agents.orchestrator.write_repos", return_value=[out / "click-counter"]):
+            run_pipeline(["Build a counter"], topic="React", output_dir=out, skip_refine=True)
+
+        assert (out / MANIFEST_FILENAME).exists()
+
+
+class TestResumePipeline:
+    def _write_manifest(self, directory: Path, topic: str = "React"):
+        """Write a build_manifest.json into directory."""
+        build_result = make_build_result()
+        save_build_manifest(build_result, directory, topic)
+        return build_result
+
+    def test_resume_skips_builder(self, tmp_path):
+        out = tmp_path / "output"
+        out.mkdir()
+        (out / "click-counter").mkdir()
+        self._write_manifest(out)
+
+        with patch("agents.orchestrator.build_challenges") as mock_build, \
+             patch("agents.orchestrator.expert_evaluate", return_value=make_expert_feedback()), \
+             patch("agents.orchestrator.novice_evaluate", return_value=make_novice_feedback()), \
+             patch("agents.orchestrator.save_reference_solution"):
+            run_pipeline([], topic="", output_dir=out, resume_from=out)
+
+        mock_build.assert_not_called()
+
+    def test_resume_skips_write_repos_first_iteration(self, tmp_path):
+        out = tmp_path / "output"
+        out.mkdir()
+        (out / "click-counter").mkdir()
+        self._write_manifest(out)
+
+        with patch("agents.orchestrator.build_challenges"), \
+             patch("agents.orchestrator.write_repos") as mock_write, \
+             patch("agents.orchestrator.expert_evaluate", return_value=make_expert_feedback()), \
+             patch("agents.orchestrator.novice_evaluate", return_value=make_novice_feedback()), \
+             patch("agents.orchestrator.save_reference_solution"):
+            run_pipeline([], topic="", output_dir=out, resume_from=out)
+
+        mock_write.assert_not_called()
+
+    def test_resume_loads_topic_from_manifest(self, tmp_path):
+        out = tmp_path / "output"
+        out.mkdir()
+        (out / "click-counter").mkdir()
+        self._write_manifest(out, topic="JavaScript closures")
+
+        with patch("agents.orchestrator.build_challenges"), \
+             patch("agents.orchestrator.expert_evaluate", return_value=make_expert_feedback()), \
+             patch("agents.orchestrator.novice_evaluate", return_value=make_novice_feedback()), \
+             patch("agents.orchestrator.save_reference_solution"):
+            result = run_pipeline([], topic="", output_dir=out, resume_from=out)
+
+        assert result.topic == "JavaScript closures"
+
+    def test_resume_still_refines_on_failure(self, tmp_path):
+        out = tmp_path / "output"
+        out.mkdir()
+        (out / "click-counter").mkdir()
+        self._write_manifest(out)
+        expert_bad = make_expert_feedback(tests_passed=False)
+        expert_good = make_expert_feedback(tests_passed=True)
+
+        with patch("agents.orchestrator.build_challenges", return_value=make_build_result()) as mock_build, \
+             patch("agents.orchestrator.write_repos", side_effect=_make_write_repos_side_effect(out)), \
+             patch("agents.orchestrator.expert_evaluate", side_effect=[expert_bad, expert_good]), \
+             patch("agents.orchestrator.novice_evaluate", return_value=make_novice_feedback()), \
+             patch("agents.orchestrator.read_repo_files", return_value={}), \
+             patch("agents.orchestrator.save_reference_solution"):
+            result = run_pipeline([], topic="", output_dir=out, resume_from=out, max_iterations=3)
+
+        # Builder called once for the refinement (not for initial build)
+        assert mock_build.call_count == 1
+        assert result.outcomes[0].iterations == 2

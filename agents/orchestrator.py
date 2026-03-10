@@ -13,12 +13,15 @@ import json
 import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Optional
 
 from agents.builder import ChallengeRepo, BuildResult, build_challenges, write_repos
 from agents.student_expert import ExpertFeedback, evaluate_repo as expert_evaluate, save_reference_solution
 from agents.student_novice import NoviceFeedback, evaluate_repo as novice_evaluate
 from tools.file_tools import read_repo_files
 import config
+
+MANIFEST_FILENAME = "build_manifest.json"
 
 
 @dataclass
@@ -49,6 +52,60 @@ class RunResult:
         return "\n".join(lines)
 
 
+def save_build_manifest(build_result: BuildResult, output_dir: Path, topic: str) -> Path:
+    """
+    Persist slim repo metadata (no file contents) to build_manifest.json.
+
+    Written immediately after the initial build so the pipeline can be
+    resumed with --resume-from without re-running the Builder.
+    """
+    manifest = {
+        "topic": topic,
+        "repos": [
+            {
+                "name": r.name,
+                "description": r.description,
+                "challenges": r.challenges,
+                "install_command": r.install_command,
+                "test_command": r.test_command,
+            }
+            for r in build_result.repos
+        ],
+    }
+    path = output_dir / MANIFEST_FILENAME
+    output_dir.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(manifest, indent=2))
+    return path
+
+
+def load_build_manifest(resume_dir: Path) -> tuple[BuildResult, str]:
+    """
+    Reconstruct a BuildResult from a previously saved build_manifest.json.
+
+    Returns (BuildResult, topic). The ChallengeRepo objects have empty
+    ``files`` dicts because the actual files are already on disk.
+    """
+    path = resume_dir / MANIFEST_FILENAME
+    if not path.exists():
+        raise FileNotFoundError(
+            f"No {MANIFEST_FILENAME} found in {resume_dir}.\n"
+            "Make sure this directory was created by this tool (--no-refine or a previous run)."
+        )
+    data = json.loads(path.read_text())
+    repos = [
+        ChallengeRepo(
+            name=r["name"],
+            description=r["description"],
+            challenges=r["challenges"],
+            install_command=r["install_command"],
+            test_command=r["test_command"],
+            files={},  # already on disk — read_repo_files() fetches them when needed
+        )
+        for r in data["repos"]
+    ]
+    return BuildResult(repos=repos), data["topic"]
+
+
 def run_pipeline(
     challenge_descriptions: list[str],
     topic: str,
@@ -57,6 +114,7 @@ def run_pipeline(
     max_iterations: int = config.MAX_ITERATIONS,
     skip_novice: bool = False,
     skip_refine: bool = False,
+    resume_from: Optional[Path] = None,
     console=None,  # Optional rich Console for pretty output
 ) -> RunResult:
     """
@@ -70,6 +128,8 @@ def run_pipeline(
         max_iterations: how many refinement passes to allow
         skip_novice: if True, skip the novice student pass
         skip_refine: if True, generate only (no student validation or refinement)
+        resume_from: if set, skip the Builder and load repos from this directory's
+                     build_manifest.json (files already on disk)
         console: optional rich.Console for pretty-printed progress
     """
     def log(msg: str):
@@ -82,21 +142,32 @@ def run_pipeline(
     ref_dir = output_dir / "reference_solutions"
     iteration_log = []
 
+    # ── Build or resume ───────────────────────────────────────────────────────
+    if resume_from:
+        log(f"\n[bold cyan]Resuming from {resume_from}...[/bold cyan]" if console else f"\nResuming from {resume_from}...")
+        build_result, topic = load_build_manifest(resume_from)
+        output_dir = resume_from  # evaluate in the same dir
+        ref_dir = output_dir / "reference_solutions"
+    else:
+        log(f"\n[bold cyan]Building challenges...[/bold cyan]" if console else "\nBuilding challenges...")
+        build_result = build_challenges(
+            challenge_descriptions=challenge_descriptions,
+            topic=topic,
+            instructor_notes=instructor_notes,
+        )
+
     result = RunResult(topic=topic, output_dir=output_dir)
 
-    # ── Build initial challenge repos ────────────────────────────────────────
-    log(f"\n[bold cyan]Building challenges...[/bold cyan]" if console else "\nBuilding challenges...")
-    build_result = build_challenges(
-        challenge_descriptions=challenge_descriptions,
-        topic=topic,
-        instructor_notes=instructor_notes,
-    )
-
-    if skip_refine:
+    if skip_refine and not resume_from:
         # Just write the repos and return
         repo_paths = write_repos(build_result, output_dir)
+        save_build_manifest(build_result, output_dir, topic)
         log(f"Generated {len(repo_paths)} repo(s). Skipping student validation.")
         return result
+
+    # Save manifest so this run can be resumed if interrupted
+    if not resume_from:
+        save_build_manifest(build_result, output_dir, topic)
 
     # ── Per-repo evaluation + refinement loop ────────────────────────────────
     for repo in build_result.repos:
@@ -106,19 +177,25 @@ def run_pipeline(
         prior_files: dict[str, str] | None = None
         expert_fb: ExpertFeedback | None = None
         novice_fb: NoviceFeedback | None = None
-        repo_path: Path | None = None
         iteration = 0
         current_repo = repo
         current_build = BuildResult(repos=[repo])
 
+        # On resume the files are already on disk; skip the first write
+        repo_path: Path | None = (resume_from / repo.name) if resume_from else None
+        skip_write_this_iteration = resume_from is not None
+
         for iteration in range(1, max_iterations + 1):
             log(f"  Iteration {iteration}/{max_iterations}...")
 
-            # Write repo to disk
-            if repo_path and repo_path.exists():
-                shutil.rmtree(repo_path)
-            repo_paths = write_repos(current_build, output_dir)
-            repo_path = repo_paths[0]
+            # Write repo to disk (skipped on first iteration when resuming)
+            if skip_write_this_iteration:
+                skip_write_this_iteration = False
+            else:
+                if repo_path and repo_path.exists():
+                    shutil.rmtree(repo_path)
+                repo_paths = write_repos(current_build, output_dir)
+                repo_path = repo_paths[0]
 
             # Expert student
             log("    Expert student evaluating...")

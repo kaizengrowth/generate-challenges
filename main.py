@@ -22,7 +22,7 @@ from rich.prompt import Prompt
 
 import config
 from agents.recommender import recommend_challenges, ChallengeCandidate
-from agents.orchestrator import run_pipeline
+from agents.orchestrator import run_pipeline, MANIFEST_FILENAME
 
 app = typer.Typer(help="Generate coding challenges for bootcamp students.")
 console = Console()
@@ -37,11 +37,38 @@ def generate(
     skip_novice: Annotated[bool, typer.Option("--skip-novice", help="Skip novice student evaluation (faster)")] = False,
     no_refine: Annotated[bool, typer.Option("--no-refine", help="Generate only, no student validation")] = False,
     notes: Annotated[Optional[str], typer.Option("--notes", "-n", help="Instructor notes for the builder")] = None,
+    resume_from: Annotated[Optional[str], typer.Option("--resume-from", "-r", help="Resume evaluation from an existing output dir (skips Builder)")] = None,
 ):
     """Generate coding challenges from a topic or explicit challenge descriptions."""
 
+    # ── Resume mode — skip recommender + builder ─────────────────────────────
+    if resume_from:
+        resume_path = Path(resume_from)
+        if not (resume_path / MANIFEST_FILENAME).exists():
+            console.print(f"[red]Error: no {MANIFEST_FILENAME} found in {resume_path}[/red]")
+            console.print("Make sure this path was produced by a previous run of this tool.")
+            raise typer.Exit(1)
+
+        console.print(Panel(
+            f"[bold]Resuming from:[/bold] {resume_path}\n"
+            f"[bold]Max iterations:[/bold] {max_iterations}",
+            title="Resume Evaluation",
+        ))
+
+        result = run_pipeline(
+            challenge_descriptions=[],   # unused when resume_from is set
+            topic="",                    # loaded from manifest
+            output_dir=resume_path,
+            max_iterations=max_iterations,
+            skip_novice=skip_novice,
+            resume_from=resume_path,
+            console=console,
+        )
+        _print_results(result, resume_path)
+        return
+
     if not topic and not challenge:
-        console.print("[red]Error: provide --topic or at least one --challenge[/red]")
+        console.print("[red]Error: provide --topic, --challenge, or --resume-from[/red]")
         raise typer.Exit(1)
 
     # ── Determine challenge descriptions ────────────────────────────────────
@@ -79,8 +106,12 @@ def generate(
         skip_refine=no_refine,
         console=console,
     )
+    _print_results(result, dest)
 
-    # ── Print summary ─────────────────────────────────────────────────────────
+
+
+def _print_results(result, dest: Path) -> None:
+    """Print the results summary table."""
     console.print("\n")
     table = Table(title="Results", show_lines=True)
     table.add_column("Repo", style="cyan")
