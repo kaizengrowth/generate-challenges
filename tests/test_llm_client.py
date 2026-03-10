@@ -75,7 +75,8 @@ class TestCliMode:
         cmd = mock_run.call_args.args[0]
         assert "--print" in cmd
 
-    def test_cli_command_includes_model(self, monkeypatch):
+    def test_cli_command_does_not_include_model(self, monkeypatch):
+        """CLI uses the user's configured model, so --model flag is intentionally omitted."""
         monkeypatch.setattr(config, "USE_CLAUDE_CLI", True)
         mock_proc = MagicMock()
         mock_proc.returncode = 0
@@ -85,8 +86,7 @@ class TestCliMode:
             call_llm(system="s", user="u", model="claude-haiku-4-5-20251001", max_tokens=100)
 
         cmd = mock_run.call_args.args[0]
-        assert "--model" in cmd
-        assert "claude-haiku-4-5-20251001" in cmd
+        assert "--model" not in cmd
 
     def test_cli_raises_on_nonzero_exit(self, monkeypatch):
         monkeypatch.setattr(config, "USE_CLAUDE_CLI", True)
@@ -98,7 +98,8 @@ class TestCliMode:
             with pytest.raises(RuntimeError, match="Claude CLI failed"):
                 call_llm(system="s", user="u", model="claude-sonnet-4-6", max_tokens=100)
 
-    def test_system_prompt_included_in_message(self, monkeypatch):
+    def test_system_prompt_included_in_stdin(self, monkeypatch):
+        """System prompt and user message are combined and passed via stdin."""
         monkeypatch.setattr(config, "USE_CLAUDE_CLI", True)
         mock_proc = MagicMock()
         mock_proc.returncode = 0
@@ -107,8 +108,22 @@ class TestCliMode:
         with patch("tools.llm_client.subprocess.run", return_value=mock_proc) as mock_run:
             call_llm(system="MY SYSTEM PROMPT", user="user msg", model="claude-sonnet-4-6", max_tokens=100)
 
-        # The combined prompt (last arg in the CLI command) should contain the system prompt
-        cmd = mock_run.call_args.args[0]
-        combined_prompt = cmd[-1]
+        # The combined prompt is passed via stdin (input= kwarg), not as a positional arg
+        call_kwargs = mock_run.call_args.kwargs
+        combined_prompt = call_kwargs["input"]
         assert "MY SYSTEM PROMPT" in combined_prompt
         assert "user msg" in combined_prompt
+
+    def test_cli_strips_anthropic_api_key_from_env(self, monkeypatch):
+        """ANTHROPIC_API_KEY must not leak into the CLI process (placeholder key causes auth failure)."""
+        monkeypatch.setattr(config, "USE_CLAUDE_CLI", True)
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-placeholder")
+        mock_proc = MagicMock()
+        mock_proc.returncode = 0
+        mock_proc.stdout = "ok"
+
+        with patch("tools.llm_client.subprocess.run", return_value=mock_proc) as mock_run:
+            call_llm(system="s", user="u", model="claude-sonnet-4-6", max_tokens=100)
+
+        call_kwargs = mock_run.call_args.kwargs
+        assert "ANTHROPIC_API_KEY" not in call_kwargs["env"]
