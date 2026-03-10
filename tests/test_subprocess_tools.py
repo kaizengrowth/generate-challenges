@@ -81,3 +81,11 @@ class TestRunTests:
             run_tests(tmp_path, "npm install", "npm test")
         for c in mock_run.call_args_list:
             assert c.kwargs.get("shell") is True
+
+    def test_sets_ci_true_in_env(self, tmp_path):
+        """CI=true prevents Jest and other runners from entering watch mode."""
+        with patch("tools.subprocess_tools.subprocess.run") as mock_run:
+            mock_run.return_value = _mock_proc(0)
+            run_tests(tmp_path, "npm install", "npm test")
+        for c in mock_run.call_args_list:
+            assert c.kwargs.get("env", {}).get("CI") == "true"

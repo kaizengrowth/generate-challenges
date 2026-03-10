@@ -1,5 +1,6 @@
 """Run test commands inside challenge repos and capture output."""
 
+import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -21,7 +22,14 @@ def run_tests(repo_dir: Path, install_command: str, test_command: str) -> TestRe
     """
     Run install then test commands inside repo_dir.
     Returns a TestResult with captured output.
+
+    CI=true is injected into the subprocess environment so that Jest (and
+    most other test runners) run in non-interactive, single-pass mode and
+    exit immediately rather than entering watch mode.
     """
+    # Propagate current environment and force non-interactive / CI mode
+    env = {**os.environ, "CI": "true"}
+
     # Install dependencies
     install_result = subprocess.run(
         install_command,
@@ -29,7 +37,8 @@ def run_tests(repo_dir: Path, install_command: str, test_command: str) -> TestRe
         cwd=repo_dir,
         capture_output=True,
         text=True,
-        timeout=120,
+        timeout=300,
+        env=env,
     )
     if install_result.returncode != 0:
         combined = (
@@ -49,7 +58,8 @@ def run_tests(repo_dir: Path, install_command: str, test_command: str) -> TestRe
         cwd=repo_dir,
         capture_output=True,
         text=True,
-        timeout=120,
+        timeout=300,
+        env=env,
     )
     combined = ""
     if test_result.stdout:
