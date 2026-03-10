@@ -21,10 +21,13 @@ ANTHROPIC_API_KEY=sk-ant-...  # required when USE_CLAUDE_CLI=false
 
 ```bash
 # Topic mode — runs recommender, instructor selects interactively
-.venv/bin/python main.py --topic "React state management"
+python main.py --topic "React state management"
 
 # Direct mode — skip recommender, build specific challenges
-.venv/bin/python main.py --challenge "Build a click counter" --challenge "Build a toggle"
+python main.py --challenge "Build a click counter" --challenge "Build a toggle"
+
+# Resume after a crash — skip the Builder, reuse repos already on disk
+python main.py --resume-from output/react-state-management
 
 # Common flags
 --no-refine        # generate only, skip student validation (fastest)
@@ -32,6 +35,7 @@ ANTHROPIC_API_KEY=sk-ant-...  # required when USE_CLAUDE_CLI=false
 --max-iterations 2 # override refinement loop limit (default: 3)
 --notes "..."      # pass instructor guidance directly to the builder
 --output-dir ...   # override default output location
+--resume-from DIR  # resume from an existing output directory
 ```
 
 Output lands in `output/{topic-slug}/` — each challenge cluster is its own independent git repo, fully runnable with just `install + test`.
