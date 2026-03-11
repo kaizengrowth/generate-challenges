@@ -114,7 +114,8 @@ Your output MUST be a single valid JSON object with this structure:
 ## Debugging Challenge Rules (when applicable)
 - Provide intentionally broken code (logic bugs, not syntax errors)
 - Tests should pass ONLY when the bugs are fixed
-- Comment the broken sections with something like: // BUG: describe what's wrong here (but don't say how to fix it)
+- The README describes only the incorrect behavior the student will observe (e.g., "the function returns undefined instead of the expected value") — do NOT hint at the cause or the fix
+- Do NOT add bug comments or annotations in the code; the student must locate and diagnose the issue themselves
 
 ## Output Requirements
 - Output ONLY the JSON object, no markdown fences, no explanation text
