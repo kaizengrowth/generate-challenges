@@ -26,7 +26,7 @@ def call_llm(
     Routes to the Anthropic API or Claude Code CLI based on config.USE_CLAUDE_CLI.
     """
     if config.USE_CLAUDE_CLI:
-        return _call_cli(system=system, user=user, model=model)
+        return _call_cli(system=system, user=user, model=model, max_tokens=max_tokens)
     else:
         return _call_api(system=system, user=user, model=model, max_tokens=max_tokens)
 
@@ -42,7 +42,7 @@ def _call_api(system: str, user: str, model: str, max_tokens: int) -> str:
     return response.content[0].text
 
 
-def _call_cli(system: str, user: str, model: str) -> str:
+def _call_cli(system: str, user: str, model: str, max_tokens: int = 8096) -> str:
     """
     Call the Claude Code CLI (`claude`) in print mode.
 
@@ -64,7 +64,7 @@ def _call_cli(system: str, user: str, model: str) -> str:
     env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
 
     result = subprocess.run(
-        ["claude", "--print"],
+        ["claude", "--print", "--max-tokens", str(max_tokens)],
         input=combined,
         capture_output=True,
         text=True,

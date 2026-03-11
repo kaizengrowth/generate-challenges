@@ -295,15 +295,20 @@ def run_pipeline(
             prior_files = read_repo_files(repo_path)
             log(f"    Issues found. Sending feedback to Builder...")
 
-            current_build = build_challenges(
-                challenge_descriptions=[current_repo.description],
-                topic=topic,
-                instructor_notes=instructor_notes,
-                revision_feedback=feedback_summary,
-                prior_files={current_repo.name: prior_files},
-            )
-            current_repo = current_build.repos[0]
-            pending_changes_summary = _summarize_changes(prior_files, current_repo.files)
+            try:
+                current_build = build_challenges(
+                    challenge_descriptions=[current_repo.description],
+                    topic=topic,
+                    instructor_notes=instructor_notes,
+                    revision_feedback=feedback_summary,
+                    prior_files={current_repo.name: prior_files},
+                )
+                current_repo = current_build.repos[0]
+                pending_changes_summary = _summarize_changes(prior_files, current_repo.files)
+            except (ValueError, KeyError) as e:
+                log(f"    [yellow]Builder refinement failed: {e}[/yellow]" if console else f"    Warning: Builder refinement failed: {e}")
+                log(f"    Keeping current build and skipping further refinement.")
+                break
 
         # Save reference solution
         if expert_fb and expert_fb.solution_files:
