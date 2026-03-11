@@ -42,7 +42,7 @@ def _call_api(system: str, user: str, model: str, max_tokens: int) -> str:
     return response.content[0].text
 
 
-def _call_cli(system: str, user: str, model: str, max_tokens: int = 8096) -> str:
+def _call_cli(system: str, user: str, model: str, max_tokens: int = 0) -> str:  # max_tokens unused: CLI controls output length internally
     """
     Call the Claude Code CLI (`claude`) in print mode.
 
@@ -64,7 +64,7 @@ def _call_cli(system: str, user: str, model: str, max_tokens: int = 8096) -> str
     env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
 
     result = subprocess.run(
-        ["claude", "--print", "--max-tokens", str(max_tokens)],
+        ["claude", "--print"],
         input=combined,
         capture_output=True,
         text=True,
