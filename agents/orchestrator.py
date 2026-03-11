@@ -9,6 +9,7 @@ Flow:
   5. Save reference solutions and iteration log
 """
 
+import difflib
 import json
 import shutil
 from dataclasses import dataclass, field
@@ -19,6 +20,7 @@ from agents.builder import ChallengeRepo, BuildResult, build_challenges, write_r
 from agents.student_expert import ExpertFeedback, evaluate_repo as expert_evaluate, save_reference_solution
 from agents.student_novice import NoviceFeedback, evaluate_repo as novice_evaluate
 from tools.file_tools import read_repo_files
+from tools.llm_client import call_llm
 import config
 
 MANIFEST_FILENAME = "build_manifest.json"
@@ -106,6 +108,51 @@ def load_build_manifest(resume_dir: Path) -> tuple[BuildResult, str]:
     return BuildResult(repos=repos), data["topic"]
 
 
+def _summarize_changes(prior_files: dict[str, str], new_files: dict[str, str]) -> list[str]:
+    """
+    Use an LLM to produce a natural-language bullet list describing what the
+    Builder changed between two iterations.
+    """
+    prior_keys = set(prior_files)
+    new_keys = set(new_files)
+
+    diff_sections = []
+
+    for path in sorted(new_keys - prior_keys):
+        diff_sections.append(f"### NEW FILE: {path}\n{new_files[path]}")
+
+    for path in sorted(prior_keys - new_keys):
+        diff_sections.append(f"### REMOVED FILE: {path}")
+
+    for path in sorted(prior_keys & new_keys):
+        old_lines = prior_files[path].splitlines(keepends=True)
+        new_lines = new_files[path].splitlines(keepends=True)
+        if old_lines == new_lines:
+            continue
+        diff = "".join(difflib.unified_diff(old_lines, new_lines, fromfile=f"a/{path}", tofile=f"b/{path}", n=3))
+        if diff:
+            diff_sections.append(f"### MODIFIED: {path}\n{diff}")
+
+    if not diff_sections:
+        return ["No changes detected"]
+
+    diff_text = "\n\n".join(diff_sections)
+
+    system = "You are analyzing changes a Builder agent made to a coding challenge repository between refinement iterations."
+    user = f"""The Builder revised a coding challenge repo in response to student feedback. Below are the file changes (unified diff format; new files shown in full).
+
+Summarize what was changed as a concise bulleted list. Each bullet should describe ONE meaningful change — what was fixed, added, or clarified and why it matters. Focus on intent and impact, not mechanics. Use present tense (e.g., "Adds test for...", "Fixes...", "Updates README to...").
+
+{diff_text}
+
+Return ONLY a JSON array of strings, one string per bullet. No markdown fences. Example: ["Adds a test asserting the button is disabled while a request is pending", "Fixes package.json to use vitest run so tests exit after one pass"]"""
+
+    raw = call_llm(system=system, user=user, model=config.SUMMARIZE_CHANGES_MODEL, max_tokens=1000)
+    if raw.startswith("```"):
+        raw = raw.split("\n", 1)[1].rsplit("```", 1)[0]
+    return json.loads(raw)
+
+
 def run_pipeline(
     challenge_descriptions: list[str],
     topic: str,
@@ -174,12 +221,12 @@ def run_pipeline(
         log(f"\n[bold]Repo: {repo.name}[/bold]" if console else f"\nRepo: {repo.name}")
         log(f"  Challenges: {', '.join(repo.challenges)}")
 
-        prior_files: dict[str, str] | None = None
         expert_fb: ExpertFeedback | None = None
         novice_fb: NoviceFeedback | None = None
         iteration = 0
         current_repo = repo
         current_build = BuildResult(repos=[repo])
+        pending_changes_summary: dict | None = None
 
         # On resume the files are already on disk; skip the first write
         repo_path: Path | None = (resume_from / repo.name) if resume_from else None
@@ -211,14 +258,17 @@ def run_pipeline(
                 novice_fb = NoviceFeedback(clarity_score=5, difficulty_assessment="appropriate")
 
             # Log this iteration
-            iteration_log.append({
+            log_entry: dict = {
                 "repo": current_repo.name,
                 "iteration": iteration,
                 "tests_passed": expert_fb.tests_passed,
                 "expert_issues": expert_fb.technical_issues + expert_fb.test_quality_issues + expert_fb.infrastructure_issues,
                 "novice_clarity": novice_fb.clarity_score,
                 "novice_issues": novice_fb.confusion_points + novice_fb.missing_context,
-            })
+            }
+            if pending_changes_summary is not None:
+                log_entry["changes_summary"] = pending_changes_summary
+            iteration_log.append(log_entry)
 
             # Check if we're done
             no_issues = (
@@ -246,6 +296,7 @@ def run_pipeline(
                 prior_files={current_repo.name: prior_files},
             )
             current_repo = current_build.repos[0]
+            pending_changes_summary = _summarize_changes(prior_files, current_repo.files)
 
         # Save reference solution
         if expert_fb and expert_fb.solution_files:

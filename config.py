@@ -27,6 +27,7 @@ BUILDER_MODEL = "claude-sonnet-4-6"
 EXPERT_STUDENT_MODEL = "claude-sonnet-4-6"
 NOVICE_STUDENT_MODEL = "claude-haiku-4-5-20251001"
 RECOMMENDER_MODEL = "claude-haiku-4-5-20251001"
+SUMMARIZE_CHANGES_MODEL = "claude-haiku-4-5-20251001"
 
 # Refinement loop
 MAX_ITERATIONS = 3
