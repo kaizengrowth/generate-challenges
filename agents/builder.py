@@ -103,6 +103,14 @@ Your output MUST be a single valid JSON object with this structure:
 - Every repo must be fully self-contained and runnable with just install + test commands
 - Include .gitignore appropriate for the ecosystem
 
+## Browser Visualization Rules (UI challenges: React, Vue, Angular)
+- ALWAYS generate the browser entry files so `npm run dev` / `ng serve` works out of the box
+- React: generate `index.html`, `src/main.tsx`, and `src/App.tsx`
+- Vue: generate `index.html`, `src/main.ts`, and `src/App.vue`
+- Angular: generate `src/index.html`, `src/main.ts`, `src/app/app.module.ts`, `src/app/app.component.ts`, and `angular.json`
+- `src/App.tsx` / `src/App.vue` / `src/app/app.component.ts` must import and render EVERY challenge component in its own labeled `<section>`, so students can see their work in a browser immediately
+- These entry files are required infrastructure — include them in addition to the skeleton and test files
+
 ## Debugging Challenge Rules (when applicable)
 - Provide intentionally broken code (logic bugs, not syntax errors)
 - Tests should pass ONLY when the bugs are fixed

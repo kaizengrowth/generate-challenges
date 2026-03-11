@@ -131,6 +131,68 @@ export default defineConfig({
 import "@testing-library/jest-dom";
 ```
 
+### `index.html`
+
+Required for `npm run dev` to work. Vite uses this as the entry point.
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Challenge</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+```
+
+### `src/main.tsx`
+
+Required for `npm run dev` to work. Mounts the App component into the DOM.
+
+```tsx
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import App from "./App";
+
+createRoot(document.getElementById("root")!).render(
+  <StrictMode>
+    <App />
+  </StrictMode>
+);
+```
+
+### `src/App.tsx`
+
+Import every challenge component and render each one in its own labeled section.
+Replace `ComponentName` with the actual exported name(s) from each skeleton file.
+
+```tsx
+import { ComponentName } from "./ComponentName";
+// import { OtherComponent } from "./OtherComponent";
+
+function App() {
+  return (
+    <div style={{ padding: "2rem", fontFamily: "sans-serif" }}>
+      <h1>Challenge Title</h1>
+
+      <section style={{ marginBottom: "2rem" }}>
+        <h2>Component Name</h2>
+        <ComponentName />
+      </section>
+
+      {/* Add one <section> per challenge component */}
+    </div>
+  );
+}
+
+export default App;
+```
+
 ### Running
 
 ```
@@ -223,12 +285,130 @@ module.exports = function (config) {
 };
 ```
 
+### `src/index.html`
+
+Required for `ng serve` to work. Angular's build tool uses this as the entry point.
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Challenge</title>
+  </head>
+  <body>
+    <app-root></app-root>
+  </body>
+</html>
+```
+
+### `src/main.ts`
+
+Required for `ng serve` to work. Bootstraps the root AppModule.
+
+```typescript
+import { platformBrowserDynamic } from "@angular/platform-browser-dynamic";
+import { AppModule } from "./app/app.module";
+
+platformBrowserDynamic().bootstrapModule(AppModule).catch(console.error);
+```
+
+### `src/app/app.module.ts`
+
+Declare all challenge components here so they are available in the browser.
+
+```typescript
+import { NgModule } from "@angular/core";
+import { BrowserModule } from "@angular/platform-browser";
+import { AppComponent } from "./app.component";
+import { ChallengeComponent } from "./challenge/challenge.component";
+// import additional challenge components as needed
+
+@NgModule({
+  declarations: [AppComponent, ChallengeComponent],
+  imports: [BrowserModule],
+  bootstrap: [AppComponent],
+})
+export class AppModule {}
+```
+
+### `src/app/app.component.ts`
+
+Renders all challenge components in a simple labeled layout.
+
+```typescript
+import { Component } from "@angular/core";
+
+@Component({
+  selector: "app-root",
+  template: `
+    <div style="padding: 2rem; font-family: sans-serif">
+      <h1>Challenge Title</h1>
+
+      <section style="margin-bottom: 2rem">
+        <h2>Challenge Component</h2>
+        <app-challenge></app-challenge>
+      </section>
+
+      <!-- Add one <section> per challenge component -->
+    </div>
+  `,
+})
+export class AppComponent {}
+```
+
+### `angular.json`
+
+Minimal Angular workspace config required for `ng serve` and `ng test`.
+
+```json
+{
+  "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
+  "version": 1,
+  "newProjectRoot": "projects",
+  "projects": {
+    "challenge": {
+      "projectType": "application",
+      "root": "",
+      "sourceRoot": "src",
+      "architect": {
+        "build": {
+          "builder": "@angular-devkit/build-angular:browser",
+          "options": {
+            "outputPath": "dist",
+            "index": "src/index.html",
+            "main": "src/main.ts",
+            "tsConfig": "tsconfig.json",
+            "assets": [],
+            "styles": [],
+            "scripts": []
+          }
+        },
+        "serve": {
+          "builder": "@angular-devkit/build-angular:dev-server",
+          "options": { "buildTarget": "challenge:build" }
+        },
+        "test": {
+          "builder": "@angular-devkit/build-angular:karma",
+          "options": {
+            "main": "src/main.ts",
+            "tsConfig": "tsconfig.json",
+            "karmaConfig": "karma.conf.js"
+          }
+        }
+      }
+    }
+  }
+}
+```
+
 ### Running
 
 ```
 npm install
 npm test        # stops at first failure (bail: true); fix one test at a time
-ng serve        # open in browser for visual testing
+ng serve        # open in browser for visual testing (http://localhost:4200)
 ```
 
 ---
@@ -498,6 +678,61 @@ export default defineConfig({
     globals: true,
   },
 });
+```
+
+### `index.html`
+
+Required for `npm run dev` to work. Vite uses this as the entry point.
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Challenge</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
+```
+
+### `src/main.ts`
+
+Required for `npm run dev` to work. Mounts the App component into the DOM.
+
+```typescript
+import { createApp } from "vue";
+import App from "./App.vue";
+
+createApp(App).mount("#app");
+```
+
+### `src/App.vue`
+
+Import every challenge component and render each one in its own labeled section.
+Replace `ComponentName` with the actual component name(s) from each skeleton file.
+
+```vue
+<script setup lang="ts">
+import ComponentName from "./ComponentName.vue";
+// import OtherComponent from "./OtherComponent.vue";
+</script>
+
+<template>
+  <div style="padding: 2rem; font-family: sans-serif">
+    <h1>Challenge Title</h1>
+
+    <section style="margin-bottom: 2rem">
+      <h2>Component Name</h2>
+      <ComponentName />
+    </section>
+
+    <!-- Add one <section> per challenge component -->
+  </div>
+</template>
 ```
 
 ### Running
