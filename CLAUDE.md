@@ -56,11 +56,9 @@ tools/
   file_tools.py          Read/write files, format for prompts
   repo_tools.py          git init + initial commit
   subprocess_tools.py    Run install/test commands, capture output
-skill/
-  SKILL.md               Original Claude Code skill (still usable standalone)
-  references/            Reference docs injected into every builder prompt
-    generation-patterns.md
-    project-templates.md
+references/              Reference docs injected into every builder prompt
+  generation-patterns.md
+  project-templates.md
 knowledge_base/
   challenge_types/       Builder writes here when it figures out a new challenge type
   lessons_learned.md     Cross-cutting insights appended after each run
@@ -133,7 +131,7 @@ The Builder writes to `knowledge_base/challenge_types/{slug}.md` whenever it fig
 
 ## Reference Docs
 
-`skill/references/generation-patterns.md` and `skill/references/project-templates.md` are injected verbatim into every Builder prompt. They contain:
+`references/generation-patterns.md` and `references/project-templates.md` are injected verbatim into every Builder prompt. They contain:
 - Skeleton and test examples for every supported language (TS/JS, React, Python, Java, Angular, C++, COBOL, Vue)
 - Build config templates (package.json, pom.xml, requirements.txt, CMakeLists.txt, etc.)
 - Decision guide: what signals in a README map to what skeleton/test style

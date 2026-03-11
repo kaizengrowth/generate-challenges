@@ -9,9 +9,9 @@ load_dotenv()
 ROOT = Path(__file__).parent
 
 # Paths
-SKILL_DIR = ROOT / "skill"
-GENERATION_PATTERNS = SKILL_DIR / "references" / "generation-patterns.md"
-PROJECT_TEMPLATES = SKILL_DIR / "references" / "project-templates.md"
+REFERENCES_DIR = ROOT / "references"
+GENERATION_PATTERNS = REFERENCES_DIR / "generation-patterns.md"
+PROJECT_TEMPLATES = REFERENCES_DIR / "project-templates.md"
 KNOWLEDGE_BASE_DIR = ROOT / "knowledge_base"
 CHALLENGE_TYPES_DIR = KNOWLEDGE_BASE_DIR / "challenge_types"
 LESSONS_LEARNED = KNOWLEDGE_BASE_DIR / "lessons_learned.md"

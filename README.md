@@ -160,9 +160,11 @@ tools/
   file_tools.py              Read/write files, format for prompts
   repo_tools.py              git init + initial commit
   subprocess_tools.py        Run install/test commands, capture output
+references/
+  generation-patterns.md     Skeleton/test patterns for all supported languages
+  project-templates.md       Build config templates (package.json, pom.xml, etc.)
 knowledge_base/
   challenge_types/           Builder writes here when it figures out a new challenge type
   lessons_learned.md         Cross-cutting insights appended after each run
-skill/                       Original standalone Claude Code skill (still usable)
 tests/                       Full unit test suite (130 tests, zero LLM tokens)
 ```
