@@ -15,7 +15,7 @@ from pathlib import Path
 import config
 from agents.builder import ChallengeRepo
 from tools.file_tools import read_repo_files, write_repo_files, format_files_for_prompt
-from tools.llm_client import call_llm
+from tools.llm_client import call_llm, parse_json_from_response
 from tools.subprocess_tools import run_tests, TestResult
 
 
@@ -138,9 +138,7 @@ def evaluate_repo(repo: ChallengeRepo, repo_dir: Path) -> ExpertFeedback:
         model=config.EXPERT_STUDENT_MODEL,
         max_tokens=config.STUDENT_MAX_TOKENS,
     )
-    if wb_raw.startswith("```"):
-        wb_raw = wb_raw.split("\n", 1)[1].rsplit("```", 1)[0]
-    wb_data = json.loads(wb_raw)
+    wb_data = parse_json_from_response(wb_raw, context="Expert Student (white-box)")
 
     solution_files = wb_data.get("solution_files", {})
     infrastructure_issues = wb_data.get("infrastructure_issues", [])
@@ -162,9 +160,7 @@ def evaluate_repo(repo: ChallengeRepo, repo_dir: Path) -> ExpertFeedback:
         model=config.EXPERT_STUDENT_MODEL,
         max_tokens=1000,
     )
-    if bb_raw.startswith("```"):
-        bb_raw = bb_raw.split("\n", 1)[1].rsplit("```", 1)[0]
-    bb_data = json.loads(bb_raw)
+    bb_data = parse_json_from_response(bb_raw, context="Expert Student (black-box)")
 
     return ExpertFeedback(
         solved=test_result.passed,

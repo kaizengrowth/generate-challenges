@@ -13,7 +13,7 @@ from pathlib import Path
 import config
 from agents.builder import ChallengeRepo
 from tools.file_tools import read_repo_files, format_files_for_prompt
-from tools.llm_client import call_llm
+from tools.llm_client import call_llm, parse_json_from_response
 
 
 @dataclass
@@ -125,9 +125,7 @@ def evaluate_repo(
         model=config.NOVICE_STUDENT_MODEL,
         max_tokens=config.STUDENT_MAX_TOKENS,
     )
-    if wb_raw.startswith("```"):
-        wb_raw = wb_raw.split("\n", 1)[1].rsplit("```", 1)[0]
-    wb_data = json.loads(wb_raw)
+    wb_data = parse_json_from_response(wb_raw, context="Novice Student (white-box)")
 
     # ── Black-box pass ──────────────────────────────────────────────────────
     bb_prompt = (
@@ -142,9 +140,7 @@ def evaluate_repo(
         model=config.NOVICE_STUDENT_MODEL,
         max_tokens=1000,
     )
-    if bb_raw.startswith("```"):
-        bb_raw = bb_raw.split("\n", 1)[1].rsplit("```", 1)[0]
-    bb_data = json.loads(bb_raw)
+    bb_data = parse_json_from_response(bb_raw, context="Novice Student (black-box)")
 
     return NoviceFeedback(
         clarity_score=wb_data.get("clarity_score", 3),

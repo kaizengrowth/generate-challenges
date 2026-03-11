@@ -5,6 +5,7 @@ Set USE_CLAUDE_CLI=true in .env to use your Claude Max/Pro subscription.
 Set USE_CLAUDE_CLI=false (default) to use the API with ANTHROPIC_API_KEY.
 """
 
+import json
 import os
 import subprocess
 
@@ -79,3 +80,60 @@ def _call_cli(system: str, user: str, model: str) -> str:
         )
 
     return result.stdout.strip()
+
+
+def parse_json_from_response(raw: str, context: str = "") -> dict:
+    """
+    Parse JSON from an LLM response, handling common formatting issues.
+
+    Args:
+        raw: The raw LLM response
+        context: Optional context string for error messages (e.g., "Builder response")
+
+    Returns:
+        Parsed JSON as a dict
+
+    Raises:
+        ValueError: If the response cannot be parsed as JSON
+    """
+    original_raw = raw
+
+    # Look for JSON content between markdown fences (```...```)
+    # The response might have explanatory text before/after the fence
+    if "```" in raw:
+        # Find the first occurrence of opening fence
+        first_fence = raw.find("```")
+        # Find the first newline after the opening fence (language specifier may follow)
+        after_fence = raw.find("\n", first_fence)
+        if after_fence == -1:
+            after_fence = first_fence + 3
+        else:
+            after_fence += 1
+
+        # Find the closing fence
+        closing_fence = raw.find("```", after_fence)
+        if closing_fence != -1:
+            # Extract content between fences
+            raw = raw[after_fence:closing_fence]
+        else:
+            # No closing fence, try to extract from opening fence to end
+            raw = raw[after_fence:]
+
+    # Strip any leading/trailing whitespace
+    raw = raw.strip()
+
+    # Handle empty response
+    if not raw:
+        raise ValueError(
+            f"{context} returned empty response after fence stripping.\n"
+            f"Original response (first 500 chars):\n{original_raw[:500]}"
+        )
+
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise ValueError(
+            f"{context} returned invalid JSON.\n"
+            f"Error: {e}\n"
+            f"Response (first 500 chars):\n{raw[:500]}"
+        ) from e

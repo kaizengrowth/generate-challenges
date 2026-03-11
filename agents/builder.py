@@ -10,7 +10,7 @@ from pathlib import Path
 
 import config
 from tools.file_tools import read_file, write_repo_files, format_files_for_prompt
-from tools.llm_client import call_llm
+from tools.llm_client import call_llm, parse_json_from_response
 from tools.repo_tools import git_init
 
 
@@ -118,9 +118,12 @@ Your output MUST be a single valid JSON object with this structure:
 - Do NOT add bug comments or annotations in the code; the student must locate and diagnose the issue themselves
 
 ## Output Requirements
-- Output ONLY the JSON object, no markdown fences, no explanation text
+- Output ONLY a single, valid JSON object — nothing else
+- Do NOT wrap JSON in markdown code fences
+- Do NOT add explanatory text before or after the JSON
 - All file contents must be complete and valid — no placeholders like "..." inside file content
 - Escape all special characters in JSON strings properly
+- Ensure the entire response is valid, parseable JSON that starts with { and ends with }
 """
 
 
@@ -180,12 +183,7 @@ def build_challenges(
         max_tokens=config.BUILDER_MAX_TOKENS,
     )
 
-    # Strip markdown fences if the model added them despite instructions
-    if raw.startswith("```"):
-        raw = raw.split("\n", 1)[1]
-        raw = raw.rsplit("```", 1)[0]
-
-    data = json.loads(raw)
+    data = parse_json_from_response(raw, context="Builder")
 
     repos = []
     for r in data["repos"]:

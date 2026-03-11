@@ -20,7 +20,7 @@ from agents.builder import ChallengeRepo, BuildResult, build_challenges, write_r
 from agents.student_expert import ExpertFeedback, evaluate_repo as expert_evaluate, save_reference_solution
 from agents.student_novice import NoviceFeedback, evaluate_repo as novice_evaluate
 from tools.file_tools import read_repo_files
-from tools.llm_client import call_llm
+from tools.llm_client import call_llm, parse_json_from_response
 import config
 
 MANIFEST_FILENAME = "build_manifest.json"
@@ -148,9 +148,16 @@ Summarize what was changed as a concise bulleted list. Each bullet should descri
 Return ONLY a JSON array of strings, one string per bullet. No markdown fences. Example: ["Adds a test asserting the button is disabled while a request is pending", "Fixes package.json to use vitest run so tests exit after one pass"]"""
 
     raw = call_llm(system=system, user=user, model=config.SUMMARIZE_CHANGES_MODEL, max_tokens=1000)
-    if raw.startswith("```"):
-        raw = raw.split("\n", 1)[1].rsplit("```", 1)[0]
-    return json.loads(raw)
+    # The summarizer returns a JSON array directly
+    try:
+        data = parse_json_from_response(raw, context="Change summarizer")
+        # Handle both array and object responses for backward compatibility
+        if isinstance(data, list):
+            return data
+        return data.get("changes", [])
+    except ValueError:
+        # If parsing fails, return empty list rather than crashing
+        return ["(changes could not be summarized)"]
 
 
 def run_pipeline(

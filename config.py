@@ -30,7 +30,7 @@ RECOMMENDER_MODEL = "claude-haiku-4-5-20251001"
 SUMMARIZE_CHANGES_MODEL = "claude-haiku-4-5-20251001"
 
 # Refinement loop
-MAX_ITERATIONS = 3
+MAX_ITERATIONS = 2
 
 # Token limits (API mode only)
 BUILDER_MAX_TOKENS = 16000

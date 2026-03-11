@@ -8,7 +8,7 @@ import json
 from dataclasses import dataclass
 
 import config
-from tools.llm_client import call_llm
+from tools.llm_client import call_llm, parse_json_from_response
 
 
 @dataclass
@@ -72,10 +72,7 @@ def recommend_challenges(topic: str, extra_context: str = "") -> list[ChallengeC
         model=config.RECOMMENDER_MODEL,
         max_tokens=config.RECOMMENDER_MAX_TOKENS,
     )
-    if raw.startswith("```"):
-        raw = raw.split("\n", 1)[1].rsplit("```", 1)[0]
-
-    data = json.loads(raw)
+    data = parse_json_from_response(raw, context="Recommender")
     return [
         ChallengeCandidate(
             title=c["title"],
