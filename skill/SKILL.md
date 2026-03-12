@@ -1,7 +1,7 @@
 ---
 name: generate-challenges
 description: This skill should be used when the user wants to "generate a challenge", "create challenges from this readme", "scaffold challenges", "generate student exercises from readme", "create skeleton files from readme", "build challenge files", or when asked to generate implementation skeletons and test files for a coding school challenge based on a README.
-version: 3.0.0
+version: 4.0.0
 user-invocable: true
 ---
 
@@ -12,6 +12,7 @@ This skill reads `README.md` from the current directory and generates a complete
 1. **Config / build files** so the project runs out of the box
 2. **Skeleton implementation files** — just enough structure to start, no solutions
 3. **Test files** — failing at first (✗ red), turning green (✓) as students implement
+4. **Telemetry system** — tracks learning progress, test runs, AI usage, and assessments
 
 This skill handles any language or framework. Adapt every step to what the README actually describes.
 
@@ -124,7 +125,76 @@ Write tests that are **specific and predictable**:
 
 ---
 
-## Step 5: Report Results
+## Step 5: Generate Telemetry Infrastructure
+
+See `references/telemetry-system.md` for complete implementation details.
+
+The telemetry system tracks student learning progress through five mechanisms. Generate these files:
+
+### 5.1 Configuration
+
+Generate `telemetry.config.json` at project root:
+
+```json
+{
+  "enabled": true,
+  "studentId": null,
+  "cohortId": null,
+  "remoteEndpoint": null,
+  "syncInterval": 300000,
+  "trackTestRuns": true,
+  "trackGitCommits": true,
+  "trackAIInteractions": true,
+  "trackAssessments": true
+}
+```
+
+### 5.2 Test-Run Telemetry
+
+Generate language-appropriate telemetry modules that hook into the test runner:
+
+| Language | Files to generate |
+|----------|-------------------|
+| TypeScript/JS | `src/telemetry/telemetry.ts`, `src/telemetry/vitest-reporter.ts` |
+| Python | `src/telemetry/telemetry.py`, `src/telemetry/conftest.py` |
+| Java | `src/test/java/com/challenge/telemetry/TelemetryListener.java` |
+
+Update test configuration to include the telemetry reporter.
+
+### 5.3 Git Analysis Script
+
+Generate `scripts/analyze-git-progress.sh` — a bash script that analyzes commit history to understand learning patterns (commit frequency, files changed, time between attempts).
+
+### 5.4 Progress Dashboard
+
+Generate `progress.html` — a self-contained HTML dashboard that reads from `.telemetry/` and displays:
+- Tests passed/failed
+- Total attempts
+- Time active
+- Per-challenge status
+- Recent activity timeline
+
+### 5.5 Pre/Post Assessments
+
+Generate assessment templates based on README concepts:
+
+- `assessment/pre-assessment.md` — confidence ratings and knowledge check before starting
+- `assessment/post-assessment.md` — reflection, confidence delta, AI usage survey
+
+Generate `scripts/parse-assessments.js` — parses completed assessments and writes to telemetry.
+
+### 5.6 Update .gitignore
+
+Add telemetry exclusions:
+
+```
+# Telemetry (local only)
+.telemetry/
+```
+
+---
+
+## Step 6: Report Results
 
 After generating all files, output a summary:
 
@@ -132,3 +202,22 @@ After generating all files, output a summary:
 - Show the exact commands to install and run tests
 - Remind students: tests start red (✗), turn green (✓) as they implement each challenge
 - For UI frameworks (React, Angular, Vue): also show how to run the dev server
+
+Include telemetry instructions:
+
+```
+📊 Telemetry Enabled
+────────────────────
+Learning telemetry is ON by default. Data is stored locally in .telemetry/
+
+To disable: set "enabled": false in telemetry.config.json
+To view progress: open progress.html in browser (run `npx serve .` first)
+To analyze git history: bash scripts/analyze-git-progress.sh
+
+Before starting:
+1. Fill out assessment/pre-assessment.md
+
+After finishing:
+1. Fill out assessment/post-assessment.md
+2. Run: node scripts/parse-assessments.js
+```
