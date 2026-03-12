@@ -1,6 +1,6 @@
 # Telemetry System Reference
 
-This document describes how to generate telemetry-enabled challenge projects. The telemetry system tracks student learning progress through five integrated mechanisms.
+This document describes how to generate telemetry-enabled challenge projects. The telemetry system tracks student learning progress through six integrated mechanisms.
 
 ---
 
@@ -9,10 +9,11 @@ This document describes how to generate telemetry-enabled challenge projects. Th
 The telemetry system consists of:
 
 1. **Test-Run Telemetry** — Automatic logging of test executions
-2. **Git Commit Analysis** — Post-hoc analysis of commit patterns
-3. **AI Interaction Logging** — Tracking Claude Code assistance usage
-4. **Progress Dashboard** — Visual progress tracker
-5. **Pre/Post Assessment** — Knowledge self-assessment
+2. **AI Evaluation Layer** — AI-powered code review, error analysis, and personalized hints
+3. **Git Commit Analysis** — Post-hoc analysis of commit patterns
+4. **AI Interaction Logging** — Tracking Claude Code assistance usage
+5. **Progress Dashboard** — Visual progress tracker
+6. **Pre/Post Assessment** — Knowledge self-assessment
 
 All telemetry is **opt-out by default** (enabled unless student disables it).
 
@@ -34,13 +35,39 @@ Generate a `telemetry.config.json` at the project root:
   "trackTestRuns": true,
   "trackGitCommits": true,
   "trackAIInteractions": true,
-  "trackAssessments": true
+  "trackAssessments": true,
+  "aiEvaluation": {
+    "enabled": true,
+    "provider": "anthropic",
+    "apiKeyEnvVar": "ANTHROPIC_API_KEY",
+    "model": "claude-sonnet-4-20250514",
+    "trigger": "on_test_run",
+    "features": {
+      "codeQuality": true,
+      "errorPatterns": true,
+      "learningProgress": true,
+      "hints": true
+    }
+  }
 }
 ```
 
 Students can disable telemetry by setting `"enabled": false`.
 
 Instructors can pre-configure `studentId`, `cohortId`, and `remoteEndpoint` before distributing.
+
+### AI Evaluation Configuration
+
+| Field | Values | Description |
+|-------|--------|-------------|
+| `provider` | `"anthropic"`, `"openai"`, `"ollama"` | AI provider to use |
+| `apiKeyEnvVar` | string | Environment variable containing API key |
+| `model` | string | Model identifier (provider-specific) |
+| `trigger` | `"on_test_run"`, `"on_demand"`, `"on_completion"` | When to run AI evaluation |
+| `features.codeQuality` | boolean | Analyze style, readability, best practices |
+| `features.errorPatterns` | boolean | Identify common mistakes and misconceptions |
+| `features.learningProgress` | boolean | Track skill gaps and mastery |
+| `features.hints` | boolean | Generate contextual hints for failing tests |
 
 ---
 
@@ -593,14 +620,815 @@ public class TelemetryListener implements TestExecutionListener {
 
 Register in `src/test/resources/META-INF/services/org.junit.platform.launcher.TestExecutionListener`:
 
-```
+```text
 com.challenge.telemetry.TelemetryListener
 com.challenge.support.ChallengeTestListener
 ```
 
 ---
 
-## 2. Git Commit Analysis
+## 2. AI Evaluation Layer
+
+The AI Evaluation Layer provides intelligent analysis of student code, building on top of raw test-run telemetry. It uses LLMs to provide:
+
+- **Code Quality Review** — Style, readability, naming, best practices
+- **Error Pattern Analysis** — Common mistakes, misconceptions, root cause identification
+- **Learning Progress Tracking** — Skill gaps, concept mastery, personalized recommendations
+- **Contextual Hints** — Targeted suggestions for failing tests without giving away solutions
+
+### Event Schema
+
+AI evaluations are stored in `.telemetry/ai-evaluations.jsonl`:
+
+```json
+{
+  "type": "ai_evaluation",
+  "timestamp": "2025-03-12T14:30:05.000Z",
+  "sessionId": "abc123",
+  "challenge": "Stack",
+  "testRunId": "abc123-1710251400000",
+  "provider": "anthropic",
+  "model": "claude-sonnet-4-20250514",
+  "trigger": "on_test_run",
+  "evaluation": {
+    "codeQuality": {
+      "score": 7,
+      "strengths": ["Good variable naming", "Consistent formatting"],
+      "improvements": ["Consider using const instead of let for immutable values"],
+      "details": "The code is readable but could benefit from..."
+    },
+    "errorPatterns": {
+      "identified": ["off-by-one-error", "undefined-vs-null-confusion"],
+      "misconceptions": ["Student may not understand stack index management"],
+      "rootCause": "The pop() method decrements index after accessing, should decrement before"
+    },
+    "learningProgress": {
+      "conceptsMastered": ["class-structure", "method-definition"],
+      "conceptsStruggling": ["index-management", "edge-cases"],
+      "recommendedReview": ["Array indexing fundamentals", "Boundary conditions"]
+    },
+    "hints": [
+      {
+        "testName": "should return undefined when popping empty stack",
+        "hint": "Think about what index value means 'empty'. What should pop() check before accessing storage?",
+        "severity": "gentle"
+      }
+    ]
+  },
+  "tokensUsed": {
+    "input": 1250,
+    "output": 450
+  }
+}
+```
+
+### Implementation
+
+#### TypeScript/JavaScript
+
+Generate `src/telemetry/ai-evaluator.ts`:
+
+```typescript
+import { readFileSync, appendFileSync, existsSync, mkdirSync } from "fs";
+import { join } from "path";
+
+interface AIEvaluationConfig {
+  enabled: boolean;
+  provider: "anthropic" | "openai" | "ollama";
+  apiKeyEnvVar: string;
+  model: string;
+  trigger: "on_test_run" | "on_demand" | "on_completion";
+  features: {
+    codeQuality: boolean;
+    errorPatterns: boolean;
+    learningProgress: boolean;
+    hints: boolean;
+  };
+}
+
+interface TestRunEvent {
+  type: string;
+  timestamp: string;
+  sessionId: string;
+  challenge: string;
+  testFile: string;
+  results: Array<{
+    name: string;
+    status: string;
+    duration: number;
+    error?: string;
+  }>;
+  summary: {
+    total: number;
+    passed: number;
+    failed: number;
+  };
+}
+
+interface AIEvaluation {
+  codeQuality?: {
+    score: number;
+    strengths: string[];
+    improvements: string[];
+    details: string;
+  };
+  errorPatterns?: {
+    identified: string[];
+    misconceptions: string[];
+    rootCause: string;
+  };
+  learningProgress?: {
+    conceptsMastered: string[];
+    conceptsStruggling: string[];
+    recommendedReview: string[];
+  };
+  hints?: Array<{
+    testName: string;
+    hint: string;
+    severity: "gentle" | "moderate" | "direct";
+  }>;
+}
+
+const TELEMETRY_DIR = ".telemetry";
+const AI_EVALUATIONS_FILE = "ai-evaluations.jsonl";
+const CONFIG_FILE = "telemetry.config.json";
+
+function getConfig(): { aiEvaluation?: AIEvaluationConfig } {
+  const configPath = join(process.cwd(), CONFIG_FILE);
+  if (existsSync(configPath)) {
+    try {
+      return JSON.parse(readFileSync(configPath, "utf-8"));
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
+function getSourceCode(challenge: string): string {
+  // Try common patterns to find source file
+  const patterns = [
+    `src/${challenge}/${challenge}.tsx`,
+    `src/${challenge}/${challenge}.ts`,
+    `src/${challenge}.tsx`,
+    `src/${challenge}.ts`,
+    `src/${challenge.toLowerCase()}.ts`,
+  ];
+
+  for (const pattern of patterns) {
+    const filePath = join(process.cwd(), pattern);
+    if (existsSync(filePath)) {
+      return readFileSync(filePath, "utf-8");
+    }
+  }
+  return "";
+}
+
+function buildPrompt(
+  testRun: TestRunEvent,
+  sourceCode: string,
+  features: AIEvaluationConfig["features"]
+): string {
+  const failedTests = testRun.results.filter((r) => r.status === "failed");
+
+  let prompt = `You are an expert coding instructor analyzing a student's work on a coding challenge.
+
+## Challenge: ${testRun.challenge}
+
+## Student's Code:
+\`\`\`
+${sourceCode}
+\`\`\`
+
+## Test Results:
+- Total: ${testRun.summary.total}
+- Passed: ${testRun.summary.passed}
+- Failed: ${testRun.summary.failed}
+
+## Failed Tests:
+${failedTests.map((t) => `- ${t.name}: ${t.error || "No error message"}`).join("\n")}
+
+Analyze this submission and provide feedback in JSON format with the following structure:
+{`;
+
+  if (features.codeQuality) {
+    prompt += `
+  "codeQuality": {
+    "score": <1-10>,
+    "strengths": ["<strength1>", "<strength2>"],
+    "improvements": ["<improvement1>", "<improvement2>"],
+    "details": "<brief paragraph>"
+  },`;
+  }
+
+  if (features.errorPatterns) {
+    prompt += `
+  "errorPatterns": {
+    "identified": ["<pattern1>", "<pattern2>"],
+    "misconceptions": ["<misconception1>"],
+    "rootCause": "<explanation of the main issue>"
+  },`;
+  }
+
+  if (features.learningProgress) {
+    prompt += `
+  "learningProgress": {
+    "conceptsMastered": ["<concept1>", "<concept2>"],
+    "conceptsStruggling": ["<concept1>"],
+    "recommendedReview": ["<topic1>", "<topic2>"]
+  },`;
+  }
+
+  if (features.hints) {
+    prompt += `
+  "hints": [
+    {
+      "testName": "<name of failing test>",
+      "hint": "<helpful hint that guides without giving the answer>",
+      "severity": "gentle|moderate|direct"
+    }
+  ],`;
+  }
+
+  prompt += `
+}
+
+Guidelines:
+- Be encouraging but honest
+- Hints should guide thinking, not provide solutions
+- Focus on the most important issues first
+- Use terminology appropriate for a learning environment
+- Identify patterns that suggest conceptual misunderstandings`;
+
+  return prompt;
+}
+
+async function callAnthropic(
+  prompt: string,
+  model: string,
+  apiKey: string
+): Promise<{ content: string; inputTokens: number; outputTokens: number }> {
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 1024,
+      messages: [{ role: "user", content: prompt }],
+    }),
+  });
+
+  const data = await response.json();
+  return {
+    content: data.content?.[0]?.text || "{}",
+    inputTokens: data.usage?.input_tokens || 0,
+    outputTokens: data.usage?.output_tokens || 0,
+  };
+}
+
+async function callOpenAI(
+  prompt: string,
+  model: string,
+  apiKey: string
+): Promise<{ content: string; inputTokens: number; outputTokens: number }> {
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages: [{ role: "user", content: prompt }],
+      max_tokens: 1024,
+    }),
+  });
+
+  const data = await response.json();
+  return {
+    content: data.choices?.[0]?.message?.content || "{}",
+    inputTokens: data.usage?.prompt_tokens || 0,
+    outputTokens: data.usage?.completion_tokens || 0,
+  };
+}
+
+async function callOllama(
+  prompt: string,
+  model: string
+): Promise<{ content: string; inputTokens: number; outputTokens: number }> {
+  const response = await fetch("http://localhost:11434/api/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model,
+      prompt,
+      stream: false,
+    }),
+  });
+
+  const data = await response.json();
+  return {
+    content: data.response || "{}",
+    inputTokens: 0, // Ollama doesn't report token counts
+    outputTokens: 0,
+  };
+}
+
+export async function evaluateTestRun(testRun: TestRunEvent): Promise<void> {
+  const config = getConfig();
+  const aiConfig = config.aiEvaluation;
+
+  if (!aiConfig?.enabled) return;
+
+  // Check trigger condition
+  if (aiConfig.trigger === "on_completion" && testRun.summary.failed > 0) {
+    return; // Only evaluate when all tests pass
+  }
+
+  const sourceCode = getSourceCode(testRun.challenge);
+  if (!sourceCode) {
+    console.warn(`[AI Eval] Could not find source code for ${testRun.challenge}`);
+    return;
+  }
+
+  const prompt = buildPrompt(testRun, sourceCode, aiConfig.features);
+
+  let result: { content: string; inputTokens: number; outputTokens: number };
+  const apiKey = process.env[aiConfig.apiKeyEnvVar] || "";
+
+  try {
+    switch (aiConfig.provider) {
+      case "anthropic":
+        result = await callAnthropic(prompt, aiConfig.model, apiKey);
+        break;
+      case "openai":
+        result = await callOpenAI(prompt, aiConfig.model, apiKey);
+        break;
+      case "ollama":
+        result = await callOllama(prompt, aiConfig.model);
+        break;
+      default:
+        return;
+    }
+
+    // Parse the AI response
+    let evaluation: AIEvaluation;
+    try {
+      // Extract JSON from response (handle markdown code blocks)
+      const jsonMatch = result.content.match(/\{[\s\S]*\}/);
+      evaluation = jsonMatch ? JSON.parse(jsonMatch[0]) : {};
+    } catch {
+      evaluation = { hints: [{ testName: "parse_error", hint: result.content, severity: "gentle" }] };
+    }
+
+    // Write evaluation to telemetry
+    const telemetryDir = join(process.cwd(), TELEMETRY_DIR);
+    if (!existsSync(telemetryDir)) {
+      mkdirSync(telemetryDir, { recursive: true });
+    }
+
+    const event = {
+      type: "ai_evaluation",
+      timestamp: new Date().toISOString(),
+      sessionId: testRun.sessionId,
+      challenge: testRun.challenge,
+      testRunId: `${testRun.sessionId}-${Date.now()}`,
+      provider: aiConfig.provider,
+      model: aiConfig.model,
+      trigger: aiConfig.trigger,
+      evaluation,
+      tokensUsed: {
+        input: result.inputTokens,
+        output: result.outputTokens,
+      },
+    };
+
+    appendFileSync(
+      join(telemetryDir, AI_EVALUATIONS_FILE),
+      JSON.stringify(event) + "\n"
+    );
+
+    // Print hints to console for immediate feedback
+    if (evaluation.hints && evaluation.hints.length > 0) {
+      console.log("\n💡 AI Hints:");
+      for (const hint of evaluation.hints) {
+        console.log(`   [${hint.testName}] ${hint.hint}`);
+      }
+      console.log("");
+    }
+  } catch (error) {
+    console.warn(`[AI Eval] Evaluation failed: ${error}`);
+  }
+}
+
+// On-demand evaluation command
+export async function runOnDemandEvaluation(): Promise<void> {
+  const config = getConfig();
+  if (!config.aiEvaluation?.enabled) {
+    console.log("AI evaluation is not enabled in telemetry.config.json");
+    return;
+  }
+
+  // Read the most recent test run
+  const testRunsPath = join(process.cwd(), TELEMETRY_DIR, "test-runs.jsonl");
+  if (!existsSync(testRunsPath)) {
+    console.log("No test runs found. Run tests first.");
+    return;
+  }
+
+  const lines = readFileSync(testRunsPath, "utf-8").trim().split("\n");
+  const lastRun = JSON.parse(lines[lines.length - 1]) as TestRunEvent;
+
+  // Force evaluation regardless of trigger setting
+  const originalTrigger = config.aiEvaluation.trigger;
+  config.aiEvaluation.trigger = "on_test_run";
+
+  await evaluateTestRun(lastRun);
+
+  config.aiEvaluation.trigger = originalTrigger;
+}
+```
+
+#### Integration with Vitest Reporter
+
+Update `src/telemetry/vitest-reporter.ts` to call the AI evaluator:
+
+```typescript
+import type { Reporter, File, Task } from "vitest";
+import { logTestRun, TestResult } from "./telemetry";
+import { evaluateTestRun } from "./ai-evaluator";
+
+// ... existing code ...
+
+export default class TelemetryReporter implements Reporter {
+  async onFinished(files?: File[]) {
+    if (!files) return;
+
+    for (const file of files) {
+      const results = collectResults(file.tasks);
+      const passed = results.filter((r) => r.status === "passed").length;
+      const failed = results.filter((r) => r.status === "failed").length;
+      const totalDuration = results.reduce((sum, r) => sum + r.duration, 0);
+
+      const testRunEvent = {
+        challenge: extractChallengeName(file.filepath),
+        testFile: file.filepath,
+        results,
+        summary: {
+          total: results.length,
+          passed,
+          failed,
+          duration: totalDuration,
+        },
+      };
+
+      // Log raw telemetry
+      logTestRun(testRunEvent);
+
+      // Run AI evaluation (async, non-blocking)
+      evaluateTestRun({
+        type: "test_run",
+        timestamp: new Date().toISOString(),
+        sessionId: getSessionId(),
+        ...testRunEvent,
+      }).catch(() => {
+        // Silently fail - don't block test output
+      });
+    }
+  }
+}
+```
+
+#### CLI Command for On-Demand Evaluation
+
+Generate `scripts/ai-evaluate.js`:
+
+```javascript
+#!/usr/bin/env node
+/**
+ * Run AI evaluation on demand.
+ *
+ * Usage: node scripts/ai-evaluate.js
+ */
+
+import { runOnDemandEvaluation } from "../src/telemetry/ai-evaluator.js";
+
+runOnDemandEvaluation()
+  .then(() => console.log("Evaluation complete."))
+  .catch((err) => console.error("Evaluation failed:", err));
+```
+
+Add to `package.json`:
+
+```json
+{
+  "scripts": {
+    "evaluate": "node scripts/ai-evaluate.js"
+  }
+}
+```
+
+### Python Implementation
+
+Generate `src/telemetry/ai_evaluator.py`:
+
+```python
+"""AI Evaluation Layer for student code analysis."""
+
+import json
+import os
+from pathlib import Path
+from typing import Optional
+import urllib.request
+
+TELEMETRY_DIR = ".telemetry"
+AI_EVALUATIONS_FILE = "ai-evaluations.jsonl"
+CONFIG_FILE = "telemetry.config.json"
+
+
+def get_config() -> dict:
+    config_path = Path(CONFIG_FILE)
+    if config_path.exists():
+        return json.loads(config_path.read_text())
+    return {}
+
+
+def get_source_code(challenge: str) -> Optional[str]:
+    patterns = [
+        f"src/{challenge}.py",
+        f"src/{challenge.lower()}.py",
+        f"src/{challenge}/{challenge}.py",
+    ]
+    for pattern in patterns:
+        path = Path(pattern)
+        if path.exists():
+            return path.read_text()
+    return None
+
+
+def build_prompt(test_run: dict, source_code: str, features: dict) -> str:
+    failed_tests = [r for r in test_run["results"] if r["status"] == "failed"]
+
+    prompt = f"""You are an expert coding instructor analyzing a student's work.
+
+## Challenge: {test_run["challenge"]}
+
+## Student's Code:
+```python
+{source_code}
+```
+
+## Test Results:
+- Total: {test_run["summary"]["total"]}
+- Passed: {test_run["summary"]["passed"]}
+- Failed: {test_run["summary"]["failed"]}
+
+## Failed Tests:
+"""
+    for t in failed_tests:
+        prompt += f"- {t['name']}: {t.get('error', 'No error message')}\n"
+
+    prompt += """
+Analyze and provide feedback in JSON format:
+{
+  "codeQuality": {"score": 1-10, "strengths": [], "improvements": [], "details": ""},
+  "errorPatterns": {"identified": [], "misconceptions": [], "rootCause": ""},
+  "learningProgress": {"conceptsMastered": [], "conceptsStruggling": [], "recommendedReview": []},
+  "hints": [{"testName": "", "hint": "", "severity": "gentle|moderate|direct"}]
+}
+
+Be encouraging but honest. Hints should guide without giving solutions."""
+
+    return prompt
+
+
+def call_anthropic(prompt: str, model: str, api_key: str) -> dict:
+    data = json.dumps({
+        "model": model,
+        "max_tokens": 1024,
+        "messages": [{"role": "user", "content": prompt}]
+    }).encode()
+
+    req = urllib.request.Request(
+        "https://api.anthropic.com/v1/messages",
+        data=data,
+        headers={
+            "Content-Type": "application/json",
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01"
+        }
+    )
+
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        result = json.loads(resp.read())
+        return {
+            "content": result.get("content", [{}])[0].get("text", "{}"),
+            "input_tokens": result.get("usage", {}).get("input_tokens", 0),
+            "output_tokens": result.get("usage", {}).get("output_tokens", 0)
+        }
+
+
+def call_openai(prompt: str, model: str, api_key: str) -> dict:
+    data = json.dumps({
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": 1024
+    }).encode()
+
+    req = urllib.request.Request(
+        "https://api.openai.com/v1/chat/completions",
+        data=data,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}"
+        }
+    )
+
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        result = json.loads(resp.read())
+        return {
+            "content": result.get("choices", [{}])[0].get("message", {}).get("content", "{}"),
+            "input_tokens": result.get("usage", {}).get("prompt_tokens", 0),
+            "output_tokens": result.get("usage", {}).get("completion_tokens", 0)
+        }
+
+
+def evaluate_test_run(test_run: dict) -> None:
+    config = get_config()
+    ai_config = config.get("aiEvaluation", {})
+
+    if not ai_config.get("enabled"):
+        return
+
+    if ai_config.get("trigger") == "on_completion" and test_run["summary"]["failed"] > 0:
+        return
+
+    source_code = get_source_code(test_run["challenge"])
+    if not source_code:
+        print(f"[AI Eval] Could not find source for {test_run['challenge']}")
+        return
+
+    prompt = build_prompt(test_run, source_code, ai_config.get("features", {}))
+    api_key = os.environ.get(ai_config.get("apiKeyEnvVar", ""), "")
+
+    try:
+        provider = ai_config.get("provider", "anthropic")
+        model = ai_config.get("model", "claude-sonnet-4-20250514")
+
+        if provider == "anthropic":
+            result = call_anthropic(prompt, model, api_key)
+        elif provider == "openai":
+            result = call_openai(prompt, model, api_key)
+        else:
+            return
+
+        # Parse response
+        try:
+            import re
+            json_match = re.search(r'\{[\s\S]*\}', result["content"])
+            evaluation = json.loads(json_match.group()) if json_match else {}
+        except Exception:
+            evaluation = {"hints": [{"testName": "parse_error", "hint": result["content"], "severity": "gentle"}]}
+
+        # Write to telemetry
+        telemetry_dir = Path(TELEMETRY_DIR)
+        telemetry_dir.mkdir(exist_ok=True)
+
+        event = {
+            "type": "ai_evaluation",
+            "timestamp": test_run.get("timestamp"),
+            "sessionId": test_run.get("sessionId"),
+            "challenge": test_run["challenge"],
+            "provider": provider,
+            "model": model,
+            "trigger": ai_config.get("trigger"),
+            "evaluation": evaluation,
+            "tokensUsed": {
+                "input": result["input_tokens"],
+                "output": result["output_tokens"]
+            }
+        }
+
+        with open(telemetry_dir / AI_EVALUATIONS_FILE, "a") as f:
+            f.write(json.dumps(event) + "\n")
+
+        # Print hints
+        hints = evaluation.get("hints", [])
+        if hints:
+            print("\n💡 AI Hints:")
+            for hint in hints:
+                print(f"   [{hint['testName']}] {hint['hint']}")
+            print()
+
+    except Exception as e:
+        print(f"[AI Eval] Evaluation failed: {e}")
+```
+
+Update `src/telemetry/conftest.py` to integrate:
+
+```python
+# Add at the end of pytest_sessionfinish
+from .ai_evaluator import evaluate_test_run
+
+# In TelemetryPlugin.pytest_sessionfinish, after log_test_run():
+try:
+    evaluate_test_run({
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "sessionId": get_session_id(),
+        "challenge": challenge,
+        "testFile": test_file,
+        "results": self.results,
+        "summary": {
+            "total": len(self.results),
+            "passed": passed,
+            "failed": failed,
+            "duration": total_duration,
+        }
+    })
+except Exception:
+    pass  # Don't block test output
+```
+
+### Usage
+
+```bash
+# Automatic (if trigger is "on_test_run")
+npm test
+
+# On-demand
+npm run evaluate
+
+# Python
+python -c "from src.telemetry.ai_evaluator import evaluate_test_run; ..."
+```
+
+### Dashboard Integration
+
+The progress dashboard should display AI evaluation results. Add this section to `progress.html`:
+
+```html
+<div class="card">
+  <h2>AI Insights</h2>
+  <div id="ai-insights">
+    <div class="no-data">No AI evaluations yet.</div>
+  </div>
+</div>
+```
+
+```javascript
+// Add to loadData()
+async function loadAIEvaluations() {
+  try {
+    const response = await fetch('.telemetry/ai-evaluations.jsonl');
+    if (!response.ok) return;
+
+    const text = await response.text();
+    const events = text.trim().split('\n').filter(Boolean).map(JSON.parse);
+
+    const container = document.getElementById('ai-insights');
+    if (!events.length) return;
+
+    const latest = events[events.length - 1];
+    const eval_ = latest.evaluation;
+
+    let html = '';
+
+    if (eval_.codeQuality) {
+      html += `<div class="insight">
+        <strong>Code Quality:</strong> ${eval_.codeQuality.score}/10
+        <p>${eval_.codeQuality.details}</p>
+      </div>`;
+    }
+
+    if (eval_.hints && eval_.hints.length) {
+      html += `<div class="insight"><strong>Hints:</strong><ul>`;
+      for (const hint of eval_.hints) {
+        html += `<li><em>${hint.testName}:</em> ${hint.hint}</li>`;
+      }
+      html += `</ul></div>`;
+    }
+
+    if (eval_.learningProgress) {
+      const struggling = eval_.learningProgress.conceptsStruggling;
+      if (struggling.length) {
+        html += `<div class="insight"><strong>Focus Areas:</strong> ${struggling.join(', ')}</div>`;
+      }
+    }
+
+    container.innerHTML = html || '<div class="no-data">No insights available.</div>';
+  } catch (e) {
+    // Silently fail
+  }
+}
+```
+
+---
+
+## 3. Git Commit Analysis
 
 Generate `scripts/analyze-git-progress.sh`:
 

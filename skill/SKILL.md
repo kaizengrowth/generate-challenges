@@ -1,7 +1,7 @@
 ---
 name: generate-challenges
 description: This skill should be used when the user wants to "generate a challenge", "create challenges from this readme", "scaffold challenges", "generate student exercises from readme", "create skeleton files from readme", "build challenge files", or when asked to generate implementation skeletons and test files for a coding school challenge based on a README.
-version: 4.0.0
+version: 5.0.0
 user-invocable: true
 ---
 
@@ -129,7 +129,7 @@ Write tests that are **specific and predictable**:
 
 See `references/telemetry-system.md` for complete implementation details.
 
-The telemetry system tracks student learning progress through five mechanisms. Generate these files:
+The telemetry system tracks student learning progress through six mechanisms. Generate these files:
 
 ### 5.1 Configuration
 
@@ -145,7 +145,20 @@ Generate `telemetry.config.json` at project root:
   "trackTestRuns": true,
   "trackGitCommits": true,
   "trackAIInteractions": true,
-  "trackAssessments": true
+  "trackAssessments": true,
+  "aiEvaluation": {
+    "enabled": true,
+    "provider": "anthropic",
+    "apiKeyEnvVar": "ANTHROPIC_API_KEY",
+    "model": "claude-sonnet-4-20250514",
+    "trigger": "on_test_run",
+    "features": {
+      "codeQuality": true,
+      "errorPatterns": true,
+      "learningProgress": true,
+      "hints": true
+    }
+  }
 }
 ```
 
@@ -161,11 +174,31 @@ Generate language-appropriate telemetry modules that hook into the test runner:
 
 Update test configuration to include the telemetry reporter.
 
-### 5.3 Git Analysis Script
+### 5.3 AI Evaluation Layer
+
+Generate AI-powered code analysis that provides:
+- **Code quality review** — style, readability, best practices
+- **Error pattern analysis** — common mistakes, misconceptions, root causes
+- **Learning progress tracking** — skill gaps, concept mastery
+- **Contextual hints** — guidance for failing tests without giving solutions
+
+| Language | Files to generate |
+|----------|-------------------|
+| TypeScript/JS | `src/telemetry/ai-evaluator.ts` |
+| Python | `src/telemetry/ai_evaluator.py` |
+
+The AI evaluator is provider-agnostic (Anthropic, OpenAI, Ollama) and configurable via `aiEvaluation` in `telemetry.config.json`.
+
+**Trigger options:**
+- `on_test_run` — evaluate after every test run (real-time feedback)
+- `on_demand` — student/instructor runs `npm run evaluate` manually
+- `on_completion` — evaluate only when all tests pass (summary review)
+
+### 5.4 Git Analysis Script
 
 Generate `scripts/analyze-git-progress.sh` — a bash script that analyzes commit history to understand learning patterns (commit frequency, files changed, time between attempts).
 
-### 5.4 Progress Dashboard
+### 5.5 Progress Dashboard
 
 Generate `progress.html` — a self-contained HTML dashboard that reads from `.telemetry/` and displays:
 - Tests passed/failed
@@ -174,7 +207,7 @@ Generate `progress.html` — a self-contained HTML dashboard that reads from `.t
 - Per-challenge status
 - Recent activity timeline
 
-### 5.5 Pre/Post Assessments
+### 5.6 Pre/Post Assessments
 
 Generate assessment templates based on README concepts:
 
@@ -183,7 +216,7 @@ Generate assessment templates based on README concepts:
 
 Generate `scripts/parse-assessments.js` — parses completed assessments and writes to telemetry.
 
-### 5.6 Update .gitignore
+### 5.7 Update .gitignore
 
 Add telemetry exclusions:
 
@@ -205,14 +238,22 @@ After generating all files, output a summary:
 
 Include telemetry instructions:
 
-```
-📊 Telemetry Enabled
-────────────────────
+```text
+Telemetry Enabled
+-----------------
 Learning telemetry is ON by default. Data is stored locally in .telemetry/
 
 To disable: set "enabled": false in telemetry.config.json
 To view progress: open progress.html in browser (run `npx serve .` first)
 To analyze git history: bash scripts/analyze-git-progress.sh
+
+AI Evaluation
+-------------
+AI-powered feedback is enabled. Set your API key:
+  export ANTHROPIC_API_KEY=your-key-here
+
+Triggers: on_test_run (default), on_demand, on_completion
+Run manually: npm run evaluate
 
 Before starting:
 1. Fill out assessment/pre-assessment.md
