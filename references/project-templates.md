@@ -166,32 +166,62 @@ createRoot(document.getElementById("root")!).render(
 );
 ```
 
+### `src/App.css`
+
+Always generate this alongside App.tsx. All layout styles go here — no inline styles in the JSX.
+
+```css
+.app-layout {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem;
+}
+
+.app-header {
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.app-header p {
+  color: var(--color-muted);
+  margin-top: 0.3rem;
+}
+
+.challenge-section {
+  margin-bottom: 1.5rem;
+}
+
+.challenge-section h2 {
+  margin-bottom: 1rem;
+}
+```
+
 ### `src/App.tsx`
 
 Import every challenge component and render each one in its own labeled section.
 Replace `ComponentName` with the actual exported name(s) from each skeleton file.
-Use the styled wrapper from the UI Styling Guide (card class, CSS variables).
+Styles come from `App.css` — no inline styles on JSX elements.
 
 ```tsx
 import { ComponentName } from "./ComponentName";
 // import { OtherComponent } from "./OtherComponent";
+import "./App.css";
 
 function App() {
   return (
-    <div style={{ maxWidth: "800px", margin: "0 auto", padding: "2.5rem 1.5rem" }}>
-      <header style={{ marginBottom: "2rem", borderBottom: "1px solid var(--color-border)", paddingBottom: "1rem" }}>
+    <div className="app-layout">
+      <header className="app-header">
         <h1>Challenge Title</h1>
-        <p style={{ color: "var(--color-muted)", marginTop: "0.3rem" }}>
-          Short description of the challenge set
-        </p>
+        <p>Short description of the challenge set</p>
       </header>
 
-      <section className="card" style={{ marginBottom: "1.5rem" }}>
-        <h2 style={{ marginBottom: "1rem" }}>Component Name</h2>
+      <section className="card challenge-section">
+        <h2>Component Name</h2>
         <ComponentName />
       </section>
 
-      {/* Add one <section className="card"> per challenge component */}
+      {/* Add one <section className="card challenge-section"> per challenge component */}
     </div>
   );
 }
@@ -341,7 +371,7 @@ export class AppModule {}
 
 ### `src/app/app.component.ts`
 
-Renders all challenge components in a styled layout. Use the CSS variables from the UI Styling Guide (loaded via `src/styles.css`).
+Renders all challenge components using class names only — no inline styles. Layout styles are added to `src/styles.css`.
 
 ```typescript
 import { Component } from "@angular/core";
@@ -349,18 +379,16 @@ import { Component } from "@angular/core";
 @Component({
   selector: "app-root",
   template: `
-    <div style="max-width: 800px; margin: 0 auto; padding: 2.5rem 1.5rem;">
-      <header style="margin-bottom: 2rem; border-bottom: 1px solid var(--color-border); padding-bottom: 1rem;">
+    <div class="app-layout">
+      <header class="app-header">
         <h1>Challenge Title</h1>
-        <p style="color: var(--color-muted); margin-top: 0.3rem;">
-          Short description of the challenge set
-        </p>
+        <p>Short description of the challenge set</p>
       </header>
-      <section class="card" style="margin-bottom: 1.5rem;">
-        <h2 style="margin-bottom: 1rem;">Challenge Component</h2>
+      <section class="card challenge-section">
+        <h2>Challenge Component</h2>
         <app-challenge></app-challenge>
       </section>
-      <!-- Add one <section class="card"> per challenge component -->
+      <!-- Add one <section class="card challenge-section"> per challenge component -->
     </div>
   `,
 })
@@ -723,7 +751,7 @@ createApp(App).mount("#app");
 
 Import every challenge component and render each one in its own labeled section.
 Replace `ComponentName` with the actual component name(s) from each skeleton file.
-Use the styled wrapper from the UI Styling Guide (card class, CSS variables).
+Layout styles go in the `<style>` block — no inline styles on elements.
 
 ```vue
 <script setup lang="ts">
@@ -732,22 +760,43 @@ import ComponentName from "./ComponentName.vue";
 </script>
 
 <template>
-  <div style="max-width: 800px; margin: 0 auto; padding: 2.5rem 1.5rem;">
-    <header style="margin-bottom: 2rem; border-bottom: 1px solid var(--color-border); padding-bottom: 1rem;">
+  <div class="app-layout">
+    <header class="app-header">
       <h1>Challenge Title</h1>
-      <p style="color: var(--color-muted); margin-top: 0.3rem;">
-        Short description of the challenge set
-      </p>
+      <p>Short description of the challenge set</p>
     </header>
 
-    <section class="card" style="margin-bottom: 1.5rem;">
-      <h2 style="margin-bottom: 1rem;">Component Name</h2>
+    <section class="card challenge-section">
+      <h2>Component Name</h2>
       <ComponentName />
     </section>
 
-    <!-- Add one <section class="card"> per challenge component -->
+    <!-- Add one <section class="card challenge-section"> per challenge component -->
   </div>
 </template>
+
+<style>
+.app-layout {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem;
+}
+.app-header {
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--color-border);
+}
+.app-header p {
+  color: var(--color-muted);
+  margin-top: 0.3rem;
+}
+.challenge-section {
+  margin-bottom: 1.5rem;
+}
+.challenge-section h2 {
+  margin-bottom: 1rem;
+}
+</style>
 ```
 
 ### Running

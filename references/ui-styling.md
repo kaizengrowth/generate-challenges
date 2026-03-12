@@ -187,30 +187,58 @@ createApp(App).mount("#app");
 
 ## App Wrapper Pattern
 
-Replace the plain `div` wrappers in App.tsx / App.vue / app.component.ts with this styled layout:
+Always generate `src/App.css` alongside `App.tsx` / `App.vue`. Keep all layout styles in the CSS file — no inline styles in App.
+
+### `src/App.css`
+
+```css
+.app-layout {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem;
+}
+
+.app-header {
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.app-header p {
+  color: var(--color-muted);
+  margin-top: 0.3rem;
+}
+
+.challenge-section {
+  margin-bottom: 1.5rem;
+}
+
+.challenge-section h2 {
+  margin-bottom: 1rem;
+}
+```
 
 ### React `src/App.tsx`
 
 ```tsx
 import { ComponentName } from "./ComponentName";
 // import { OtherComponent } from "./OtherComponent";
+import "./App.css";
 
 function App() {
   return (
-    <div style={{ maxWidth: "800px", margin: "0 auto", padding: "2.5rem 1.5rem" }}>
-      <header style={{ marginBottom: "2rem", borderBottom: "1px solid var(--color-border)", paddingBottom: "1rem" }}>
+    <div className="app-layout">
+      <header className="app-header">
         <h1>Challenge Title</h1>
-        <p style={{ color: "var(--color-muted)", marginTop: "0.3rem" }}>
-          Short description of the challenge set
-        </p>
+        <p>Short description of the challenge set</p>
       </header>
 
-      <section className="card" style={{ marginBottom: "1.5rem" }}>
-        <h2 style={{ marginBottom: "1rem" }}>Component Name</h2>
+      <section className="card challenge-section">
+        <h2>Component Name</h2>
         <ComponentName />
       </section>
 
-      {/* Add one <section className="card"> per challenge component */}
+      {/* Add one <section className="card challenge-section"> per challenge component */}
     </div>
   );
 }
@@ -220,31 +248,56 @@ export default App;
 
 ### Vue `src/App.vue`
 
+Use a `<style>` block — no inline styles on elements.
+
 ```vue
 <script setup lang="ts">
 import ComponentName from "./ComponentName.vue";
 </script>
 
 <template>
-  <div style="max-width: 800px; margin: 0 auto; padding: 2.5rem 1.5rem;">
-    <header style="margin-bottom: 2rem; border-bottom: 1px solid var(--color-border); padding-bottom: 1rem;">
+  <div class="app-layout">
+    <header class="app-header">
       <h1>Challenge Title</h1>
-      <p style="color: var(--color-muted); margin-top: 0.3rem;">
-        Short description of the challenge set
-      </p>
+      <p>Short description of the challenge set</p>
     </header>
 
-    <section class="card" style="margin-bottom: 1.5rem;">
-      <h2 style="margin-bottom: 1rem;">Component Name</h2>
+    <section class="card challenge-section">
+      <h2>Component Name</h2>
       <ComponentName />
     </section>
 
-    <!-- Add one <section class="card"> per challenge component -->
+    <!-- Add one <section class="card challenge-section"> per challenge component -->
   </div>
 </template>
+
+<style>
+.app-layout {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem;
+}
+.app-header {
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--color-border);
+}
+.app-header p {
+  color: var(--color-muted);
+  margin-top: 0.3rem;
+}
+.challenge-section {
+  margin-bottom: 1.5rem;
+}
+.challenge-section h2 {
+  margin-bottom: 1rem;
+}
+</style>
 ```
 
 ### Angular `src/app/app.component.ts`
+
+Add layout styles to `src/styles.css` (already loaded globally). The template uses only class names.
 
 ```typescript
 import { Component } from "@angular/core";
@@ -252,15 +305,13 @@ import { Component } from "@angular/core";
 @Component({
   selector: "app-root",
   template: `
-    <div style="max-width: 800px; margin: 0 auto; padding: 2.5rem 1.5rem;">
-      <header style="margin-bottom: 2rem; border-bottom: 1px solid var(--color-border); padding-bottom: 1rem;">
+    <div class="app-layout">
+      <header class="app-header">
         <h1>Challenge Title</h1>
-        <p style="color: var(--color-muted); margin-top: 0.3rem;">
-          Short description of the challenge set
-        </p>
+        <p>Short description of the challenge set</p>
       </header>
-      <section class="card" style="margin-bottom: 1.5rem;">
-        <h2 style="margin-bottom: 1rem;">Challenge Component</h2>
+      <section class="card challenge-section">
+        <h2>Challenge Component</h2>
         <app-challenge></app-challenge>
       </section>
     </div>
@@ -273,26 +324,47 @@ export class AppComponent {}
 
 ## Styling Challenge Skeleton Components
 
-When writing skeleton components, include structural `div`s and `className`/`class` attributes that use the design system — but **no logic**. Examples:
+**Keep component files clean**: no inline `style={{...}}` objects. Put all component-specific styles in a companion CSS file and use `className` / `class` attributes only.
 
-### React skeleton with layout
+### React — two files per component
+
+**`src/ClickCounter.css`**
+
+```css
+.click-counter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 1rem 0;
+}
+
+.click-counter__count {
+  font-size: 4rem;
+  font-weight: 700;
+  color: var(--color-accent);
+  min-width: 4rem;
+  text-align: center;
+}
+
+.click-counter__buttons {
+  display: flex;
+  gap: 0.75rem;
+}
+```
+
+**`src/ClickCounter.tsx`** (skeleton — no logic, no inline styles)
 
 ```tsx
+import "./ClickCounter.css";
+
 export function ClickCounter() {
   // TODO: add state here
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1.5rem", padding: "1rem 0" }}>
-      <div style={{
-        fontSize: "4rem",
-        fontWeight: 700,
-        color: "var(--color-accent)",
-        minWidth: "4rem",
-        textAlign: "center",
-      }}>
-        0
-      </div>
-      <div style={{ display: "flex", gap: "0.75rem" }}>
+    <div className="click-counter">
+      <div className="click-counter__count">0</div>
+      <div className="click-counter__buttons">
         <button className="btn-primary">Increment</button>
         <button className="btn-secondary">Reset</button>
       </div>
@@ -301,17 +373,77 @@ export function ClickCounter() {
 }
 ```
 
-### Vanilla HTML with inline styles
+### Vue — `<style scoped>` block in the `.vue` file
 
-For plain HTML challenges, inline the CSS variables as fallback hex values since `:root` may not load:
+```vue
+<script setup lang="ts">
+// TODO: add state here
+</script>
+
+<template>
+  <div class="click-counter">
+    <div class="count">0</div>
+    <div class="buttons">
+      <button class="btn-primary">Increment</button>
+      <button class="btn-secondary">Reset</button>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.click-counter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 1rem 0;
+}
+.count {
+  font-size: 4rem;
+  font-weight: 700;
+  color: var(--color-accent);
+  text-align: center;
+}
+.buttons {
+  display: flex;
+  gap: 0.75rem;
+}
+</style>
+```
+
+### Vanilla HTML — separate `style.css` file
+
+Generate `style.css` in the project root (or `src/`), link it from `index.html`. No inline styles on elements.
+
+**`style.css`**
+
+```css
+/* imports index.css design system variables, then adds page-specific styles */
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+/* ... component-specific rules ... */
+```
+
+**`index.html`**
 
 ```html
-<div style="max-width:800px;margin:0 auto;padding:2rem;background:#0f172a;color:#f1f5f9;font-family:system-ui,sans-serif;min-height:100vh;">
-  <h1 style="font-size:2rem;font-weight:700;margin-bottom:1.5rem;">Challenge Title</h1>
-  <div style="background:#1e293b;border:1px solid #334155;border-radius:10px;padding:1.5rem;">
-    <!-- challenge content here -->
-  </div>
-</div>
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Challenge</title>
+    <link rel="stylesheet" href="index.css" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="container">
+      <!-- challenge content here -->
+    </div>
+  </body>
+</html>
 ```
 
 ---
