@@ -147,7 +147,7 @@ Summarize what was changed as a concise bulleted list. Each bullet should descri
 
 Return ONLY a JSON array of strings, one string per bullet. No markdown fences. Example: ["Adds a test asserting the button is disabled while a request is pending", "Fixes package.json to use vitest run so tests exit after one pass"]"""
 
-    raw = call_llm(system=system, user=user, model=config.SUMMARIZE_CHANGES_MODEL, max_tokens=1000)
+    raw = call_llm(system=system, user=user, model=config.SUMMARIZE_CHANGES_MODEL, max_tokens=1000, agent="Change Summarizer")
     # The summarizer returns a JSON array directly
     try:
         data = parse_json_from_response(raw, context="Change summarizer")

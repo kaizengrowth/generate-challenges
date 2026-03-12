@@ -23,6 +23,7 @@ from rich.prompt import Prompt
 import config
 from agents.recommender import recommend_challenges, ChallengeCandidate
 from agents.orchestrator import run_pipeline, MANIFEST_FILENAME
+from tools import token_tracker
 
 app = typer.Typer(help="Generate coding challenges for bootcamp students.")
 console = Console()
@@ -132,9 +133,54 @@ def _print_results(result, dest: Path) -> None:
         )
 
     console.print(table)
+    _print_token_report()
     console.print(f"\n[bold green]Done![/bold green] Challenge repos saved to: [cyan]{dest}[/cyan]")
     if (dest / "reference_solutions").exists():
         console.print(f"Reference solutions: [cyan]{dest / 'reference_solutions'}[/cyan]")
+
+
+def _print_token_report() -> None:
+    """Print a breakdown of token usage per agent."""
+    usage = token_tracker.get_usage()
+    if not usage:
+        return
+
+    estimated = token_tracker.is_estimated()
+    label = "Tokens (est.)" if estimated else "Tokens"
+    note = " [dim](estimated from character counts — CLI mode)[/dim]" if estimated else ""
+
+    token_table = Table(title=f"Token Usage{note}", show_lines=True)
+    token_table.add_column("Agent", style="cyan")
+    token_table.add_column("Calls", justify="right")
+    token_table.add_column(f"Input {label}", justify="right")
+    token_table.add_column(f"Output {label}", justify="right")
+    token_table.add_column(f"Total {label}", justify="right", style="bold")
+
+    # Preferred display order
+    order = ["Recommender", "Builder", "Expert Student", "Novice Student", "Change Summarizer"]
+    agents = [a for a in order if a in usage] + [a for a in usage if a not in order]
+
+    for agent in agents:
+        u = usage[agent]
+        token_table.add_row(
+            agent,
+            str(u.calls),
+            f"{u.input_tokens:,}",
+            f"{u.output_tokens:,}",
+            f"{u.total_tokens:,}",
+        )
+
+    totals = token_tracker.totals()
+    token_table.add_row(
+        "[bold]TOTAL[/bold]",
+        str(totals.calls),
+        f"[bold]{totals.input_tokens:,}[/bold]",
+        f"[bold]{totals.output_tokens:,}[/bold]",
+        f"[bold]{totals.total_tokens:,}[/bold]",
+    )
+
+    console.print("\n")
+    console.print(token_table)
 
 
 def _recommender_flow(topic: str) -> tuple[list[str], str]:

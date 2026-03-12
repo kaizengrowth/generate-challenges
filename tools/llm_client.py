@@ -12,6 +12,7 @@ import subprocess
 import anthropic
 
 import config
+from tools import token_tracker
 
 
 def call_llm(
@@ -19,19 +20,22 @@ def call_llm(
     user: str,
     model: str,
     max_tokens: int,
+    agent: str = "unknown",
 ) -> str:
     """
     Make a single LLM call and return the response text.
 
     Routes to the Anthropic API or Claude Code CLI based on config.USE_CLAUDE_CLI.
+    Token usage is accumulated in tools.token_tracker keyed by `agent`.
     """
     if config.USE_CLAUDE_CLI:
-        return _call_cli(system=system, user=user, model=model, max_tokens=max_tokens)
+        token_tracker.set_estimated(True)
+        return _call_cli(system=system, user=user, model=model, max_tokens=max_tokens, agent=agent)
     else:
-        return _call_api(system=system, user=user, model=model, max_tokens=max_tokens)
+        return _call_api(system=system, user=user, model=model, max_tokens=max_tokens, agent=agent)
 
 
-def _call_api(system: str, user: str, model: str, max_tokens: int) -> str:
+def _call_api(system: str, user: str, model: str, max_tokens: int, agent: str) -> str:
     client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY from env
     response = client.messages.create(
         model=model,
@@ -39,10 +43,15 @@ def _call_api(system: str, user: str, model: str, max_tokens: int) -> str:
         system=system,
         messages=[{"role": "user", "content": user}],
     )
+    token_tracker.record(
+        agent=agent,
+        input_tokens=response.usage.input_tokens,
+        output_tokens=response.usage.output_tokens,
+    )
     return response.content[0].text
 
 
-def _call_cli(system: str, user: str, model: str, max_tokens: int = 0) -> str:  # max_tokens unused: CLI controls output length internally
+def _call_cli(system: str, user: str, model: str, max_tokens: int = 0, agent: str = "unknown") -> str:  # max_tokens unused: CLI controls output length internally
     """
     Call the Claude Code CLI (`claude`) in print mode.
 
@@ -79,7 +88,16 @@ def _call_cli(system: str, user: str, model: str, max_tokens: int = 0) -> str:  
             f"Claude CLI failed (exit {result.returncode}):\n{error_detail}"
         )
 
-    return result.stdout.strip()
+    output = result.stdout.strip()
+
+    # CLI doesn't expose usage metadata — estimate from character counts (÷4 ≈ tokens)
+    token_tracker.record(
+        agent=agent,
+        input_tokens=len(combined) // 4,
+        output_tokens=len(output) // 4,
+    )
+
+    return output
 
 
 def parse_json_from_response(raw: str, context: str = "") -> dict:

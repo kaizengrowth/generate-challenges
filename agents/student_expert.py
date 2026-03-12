@@ -137,6 +137,7 @@ def evaluate_repo(repo: ChallengeRepo, repo_dir: Path) -> ExpertFeedback:
         user=whitebox_prompt,
         model=config.EXPERT_STUDENT_MODEL,
         max_tokens=config.STUDENT_MAX_TOKENS,
+        agent="Expert Student",
     )
     wb_data = parse_json_from_response(wb_raw, context="Expert Student (white-box)")
 
@@ -159,6 +160,7 @@ def evaluate_repo(repo: ChallengeRepo, repo_dir: Path) -> ExpertFeedback:
         user=bb_prompt,
         model=config.EXPERT_STUDENT_MODEL,
         max_tokens=1000,
+        agent="Expert Student",
     )
     bb_data = parse_json_from_response(bb_raw, context="Expert Student (black-box)")
 

@@ -71,6 +71,7 @@ def recommend_challenges(topic: str, extra_context: str = "") -> list[ChallengeC
         user=prompt,
         model=config.RECOMMENDER_MODEL,
         max_tokens=config.RECOMMENDER_MAX_TOKENS,
+        agent="Recommender",
     )
     data = parse_json_from_response(raw, context="Recommender")
     return [

@@ -186,6 +186,7 @@ def build_challenges(
         user=user_message,
         model=config.BUILDER_MODEL,
         max_tokens=config.BUILDER_MAX_TOKENS,
+        agent="Builder",
     )
 
     data = parse_json_from_response(raw, context="Builder")

@@ -124,6 +124,7 @@ def evaluate_repo(
         user=wb_prompt,
         model=config.NOVICE_STUDENT_MODEL,
         max_tokens=config.STUDENT_MAX_TOKENS,
+        agent="Novice Student",
     )
     wb_data = parse_json_from_response(wb_raw, context="Novice Student (white-box)")
 
@@ -139,6 +140,7 @@ def evaluate_repo(
         user=bb_prompt,
         model=config.NOVICE_STUDENT_MODEL,
         max_tokens=1000,
+        agent="Novice Student",
     )
     bb_data = parse_json_from_response(bb_raw, context="Novice Student (black-box)")
 

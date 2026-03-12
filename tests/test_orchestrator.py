@@ -159,6 +159,7 @@ class TestRefinementLoop:
              patch("agents.orchestrator.expert_evaluate", side_effect=[expert_fb_bad, expert_fb_good]), \
              patch("agents.orchestrator.novice_evaluate", return_value=novice_fb), \
              patch("agents.orchestrator.read_repo_files", return_value={}), \
+             patch("agents.orchestrator._summarize_changes", return_value=["Fixed an issue"]), \
              patch("agents.orchestrator.save_reference_solution"):
             result = run_pipeline(
                 ["Build a counter"], topic="React", output_dir=out, max_iterations=3
@@ -178,6 +179,7 @@ class TestRefinementLoop:
              patch("agents.orchestrator.expert_evaluate", return_value=expert_fb), \
              patch("agents.orchestrator.novice_evaluate", side_effect=[novice_fb_bad, novice_fb_good]), \
              patch("agents.orchestrator.read_repo_files", return_value={}), \
+             patch("agents.orchestrator._summarize_changes", return_value=["Clarified README"]), \
              patch("agents.orchestrator.save_reference_solution"):
             result = run_pipeline(
                 ["Build a counter"], topic="React", output_dir=out, max_iterations=3
@@ -195,6 +197,7 @@ class TestRefinementLoop:
              patch("agents.orchestrator.expert_evaluate", return_value=expert_fb_bad), \
              patch("agents.orchestrator.novice_evaluate", return_value=make_novice_feedback()), \
              patch("agents.orchestrator.read_repo_files", return_value={}), \
+             patch("agents.orchestrator._summarize_changes", return_value=["Fixed tests"]), \
              patch("agents.orchestrator.save_reference_solution"):
             result = run_pipeline(
                 ["Build a counter"], topic="React", output_dir=out, max_iterations=2
@@ -217,6 +220,7 @@ class TestRefinementLoop:
              patch("agents.orchestrator.expert_evaluate", side_effect=[expert_fb_bad, expert_fb_good]), \
              patch("agents.orchestrator.novice_evaluate", return_value=make_novice_feedback()), \
              patch("agents.orchestrator.read_repo_files", return_value={}), \
+             patch("agents.orchestrator._summarize_changes", return_value=["Fixed import"]), \
              patch("agents.orchestrator.save_reference_solution"):
             run_pipeline(
                 ["Build a counter"], topic="React", output_dir=out, max_iterations=3
@@ -271,6 +275,8 @@ class TestLessonsLearned:
              patch("agents.orchestrator.write_repos", side_effect=_make_write_repos_side_effect(out)), \
              patch("agents.orchestrator.expert_evaluate", return_value=expert_fb), \
              patch("agents.orchestrator.novice_evaluate", return_value=make_novice_feedback()), \
+             patch("agents.orchestrator.read_repo_files", return_value={}), \
+             patch("agents.orchestrator._summarize_changes", return_value=["Fixed import path"]), \
              patch("agents.orchestrator.save_reference_solution"):
             run_pipeline(["Build a counter"], topic="React hooks", output_dir=out)
 
@@ -305,6 +311,7 @@ class TestIterationLog:
              patch("agents.orchestrator.expert_evaluate", side_effect=[expert_bad, expert_good]), \
              patch("agents.orchestrator.novice_evaluate", return_value=make_novice_feedback()), \
              patch("agents.orchestrator.read_repo_files", return_value={}), \
+             patch("agents.orchestrator._summarize_changes", return_value=["Fixed issue"]), \
              patch("agents.orchestrator.save_reference_solution"):
             run_pipeline(["Build a counter"], topic="React", output_dir=out, max_iterations=3)
 
@@ -463,6 +470,7 @@ class TestResumePipeline:
              patch("agents.orchestrator.expert_evaluate", side_effect=[expert_bad, expert_good]), \
              patch("agents.orchestrator.novice_evaluate", return_value=make_novice_feedback()), \
              patch("agents.orchestrator.read_repo_files", return_value={}), \
+             patch("agents.orchestrator._summarize_changes", return_value=["Fixed issue"]), \
              patch("agents.orchestrator.save_reference_solution"):
             result = run_pipeline([], topic="", output_dir=out, resume_from=out, max_iterations=3)
 

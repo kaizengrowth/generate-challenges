@@ -17,6 +17,7 @@ import config
 from agents.builder import ChallengeRepo, BuildResult
 from agents.student_expert import ExpertFeedback
 from agents.student_novice import NoviceFeedback
+from tools import token_tracker
 
 # ── Canonical mock LLM response strings ──────────────────────────────────────
 
@@ -123,6 +124,14 @@ RECOMMENDER_RESPONSE = json.dumps({
 
 
 # ── Config isolation (autouse — applies to every test) ───────────────────────
+
+@pytest.fixture(autouse=True)
+def reset_token_tracker():
+    """Reset module-level token tracker state before each test."""
+    token_tracker.reset()
+    yield
+    token_tracker.reset()
+
 
 @pytest.fixture(autouse=True)
 def isolated_config(tmp_path, monkeypatch):
