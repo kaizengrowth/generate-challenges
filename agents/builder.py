@@ -32,7 +32,12 @@ class BuildResult:
 def _load_reference_docs() -> str:
     patterns = read_file(config.GENERATION_PATTERNS)
     templates = read_file(config.PROJECT_TEMPLATES)
-    return f"## Generation Patterns\n\n{patterns}\n\n## Project Templates\n\n{templates}"
+    ui_styling = read_file(config.UI_STYLING)
+    return (
+        f"## Generation Patterns\n\n{patterns}\n\n"
+        f"## Project Templates\n\n{templates}\n\n"
+        f"## UI Styling Guide\n\n{ui_styling}"
+    )
 
 
 def _load_knowledge_base(topic: str) -> str:
