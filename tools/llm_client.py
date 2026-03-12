@@ -96,37 +96,32 @@ def parse_json_from_response(raw: str, context: str = "") -> dict:
     Raises:
         ValueError: If the response cannot be parsed as JSON
     """
-    original_raw = raw
-
-    # Look for JSON content between markdown fences (```...```)
-    # The response might have explanatory text before/after the fence
-    if "```" in raw:
-        # Find the first occurrence of opening fence
-        first_fence = raw.find("```")
-        # Find the first newline after the opening fence (language specifier may follow)
-        after_fence = raw.find("\n", first_fence)
-        if after_fence == -1:
-            after_fence = first_fence + 3
-        else:
-            after_fence += 1
-
-        # Find the closing fence
-        closing_fence = raw.find("```", after_fence)
-        if closing_fence != -1:
-            # Extract content between fences
-            raw = raw[after_fence:closing_fence]
-        else:
-            # No closing fence, try to extract from opening fence to end
-            raw = raw[after_fence:]
-
-    # Strip any leading/trailing whitespace
     raw = raw.strip()
 
-    # Handle empty response
+    # Fast path: try parsing as-is first (the happy path when model behaves)
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        pass
+
+    # Fallback: model wrapped JSON in a markdown fence despite instructions.
+    # Only strip if the response starts with a fence — searching anywhere would
+    # incorrectly match ``` inside file content (e.g., code blocks in a README).
+    if raw.startswith("```"):
+        # Skip the opening fence line (may have a language specifier like ```json)
+        after_newline = raw.find("\n")
+        if after_newline != -1:
+            inner = raw[after_newline + 1:]
+            # Strip trailing fence
+            closing = inner.rfind("```")
+            if closing != -1:
+                inner = inner[:closing]
+            raw = inner.strip()
+
     if not raw:
         raise ValueError(
-            f"{context} returned empty response after fence stripping.\n"
-            f"Original response (first 500 chars):\n{original_raw[:500]}"
+            f"{context} returned an empty response.\n"
+            f"Original response (first 500 chars):\n{raw[:500]}"
         )
 
     try:
