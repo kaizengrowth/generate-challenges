@@ -37,3 +37,6 @@ MAX_ITERATIONS = 2
 BUILDER_MAX_TOKENS = 16000
 STUDENT_MAX_TOKENS = 8000
 RECOMMENDER_MAX_TOKENS = 2000
+
+# CLI mode timeout (seconds) — builder can generate large responses
+CLI_TIMEOUT = 600

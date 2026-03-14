@@ -55,29 +55,32 @@ def _call_cli(system: str, user: str, model: str, max_tokens: int = 0, agent: st
     """
     Call the Claude Code CLI (`claude`) in print mode.
 
-    The system prompt is prepended to the user message and piped via stdin.
-    The --model flag is intentionally omitted: the CLI uses whatever model
-    the user has configured in their Claude Code settings, which is correct
-    for Max/Pro subscription users.
+    The system prompt is passed via --system-prompt (not embedded in stdin) to
+    prevent the model from treating <system> tags in the user message as prompt
+    injection.  Only the user message is piped via stdin.
 
-    Note: the prompt is passed via stdin (not as a positional argument) to
-    avoid shell argument-length limits and quoting issues with long prompts.
+    --no-session-persistence avoids creating leftover session files for each
+    agentic sub-call.
+
+    The --model flag is intentionally omitted: the CLI uses whatever model the
+    user has configured in their Claude Code settings (correct for Max/Pro users).
 
     ANTHROPIC_API_KEY is stripped from the subprocess environment so the CLI
-    uses its own OAuth/subscription credentials rather than any placeholder
-    key that may be set in .env.
+    uses its own OAuth/subscription credentials rather than any placeholder key
+    that may be set in .env.
     """
-    combined = f"<system>\n{system}\n</system>\n\n{user}"
-
-    # Don't let a placeholder ANTHROPIC_API_KEY bleed into the CLI process
-    env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
+    # Strip vars that must not bleed into the subprocess:
+    #   ANTHROPIC_API_KEY — placeholder keys cause auth errors
+    #   CLAUDECODE        — its presence causes the CLI to refuse to start nested sessions
+    _strip = {"ANTHROPIC_API_KEY", "CLAUDECODE"}
+    env = {k: v for k, v in os.environ.items() if k not in _strip}
 
     result = subprocess.run(
-        ["claude", "--print"],
-        input=combined,
+        ["claude", "--print", "--no-session-persistence", "--output-format", "text", "--system-prompt", system],
+        input=user,
         capture_output=True,
         text=True,
-        timeout=300,
+        timeout=config.CLI_TIMEOUT,
         env=env,
     )
 
@@ -93,7 +96,7 @@ def _call_cli(system: str, user: str, model: str, max_tokens: int = 0, agent: st
     # CLI doesn't expose usage metadata — estimate from character counts (÷4 ≈ tokens)
     token_tracker.record(
         agent=agent,
-        input_tokens=len(combined) // 4,
+        input_tokens=(len(system) + len(user)) // 4,
         output_tokens=len(output) // 4,
     )
 
@@ -104,49 +107,52 @@ def parse_json_from_response(raw: str, context: str = "") -> dict:
     """
     Parse JSON from an LLM response, handling common formatting issues.
 
-    Args:
-        raw: The raw LLM response
-        context: Optional context string for error messages (e.g., "Builder response")
-
-    Returns:
-        Parsed JSON as a dict
+    Attempts in order:
+    1. Parse as-is (happy path — model returned pure JSON)
+    2. Extract from a markdown code fence anywhere in the response
+       (handles preamble text + ```json ... ```)
+    3. Slice from the first '{' onwards
+       (handles short preamble like "Here is the JSON: {...}")
 
     Raises:
-        ValueError: If the response cannot be parsed as JSON
+        ValueError: If the response cannot be parsed as JSON after all attempts
     """
     raw = raw.strip()
 
-    # Fast path: try parsing as-is first (the happy path when model behaves)
+    if not raw:
+        raise ValueError(f"{context} returned an empty response.")
+
+    # 1. Fast path: try parsing as-is
     try:
         return json.loads(raw)
     except json.JSONDecodeError:
         pass
 
-    # Fallback: model wrapped JSON in a markdown fence despite instructions.
-    # Only strip if the response starts with a fence — searching anywhere would
-    # incorrectly match ``` inside file content (e.g., code blocks in a README).
-    if raw.startswith("```"):
-        # Skip the opening fence line (may have a language specifier like ```json)
-        after_newline = raw.find("\n")
-        if after_newline != -1:
-            inner = raw[after_newline + 1:]
-            # Strip trailing fence
+    # 2. Markdown fence — search anywhere in the response (not just at start)
+    fence_idx = raw.find("```")
+    if fence_idx != -1:
+        after_fence_line = raw.find("\n", fence_idx)
+        if after_fence_line != -1:
+            inner = raw[after_fence_line + 1:]
             closing = inner.rfind("```")
             if closing != -1:
                 inner = inner[:closing]
-            raw = inner.strip()
+            candidate = inner.strip()
+            if candidate:
+                try:
+                    return json.loads(candidate)
+                except json.JSONDecodeError:
+                    pass
 
-    if not raw:
-        raise ValueError(
-            f"{context} returned an empty response.\n"
-            f"Original response (first 500 chars):\n{raw[:500]}"
-        )
+    # 3. Slice from first '{' — handles "Here is the result: {...}"
+    brace_idx = raw.find("{")
+    if brace_idx >= 0:
+        try:
+            return json.loads(raw[brace_idx:])
+        except json.JSONDecodeError:
+            pass
 
-    try:
-        return json.loads(raw)
-    except json.JSONDecodeError as e:
-        raise ValueError(
-            f"{context} returned invalid JSON.\n"
-            f"Error: {e}\n"
-            f"Response (first 500 chars):\n{raw[:500]}"
-        ) from e
+    raise ValueError(
+        f"{context} returned invalid JSON.\n"
+        f"Response (first 500 chars):\n{raw[:500]}"
+    )

@@ -169,6 +169,7 @@ def run_pipeline(
     skip_novice: bool = False,
     skip_refine: bool = False,
     resume_from: Optional[Path] = None,
+    initial_build: Optional["BuildResult"] = None,
     console=None,  # Optional rich Console for pretty output
 ) -> RunResult:
     """
@@ -184,6 +185,8 @@ def run_pipeline(
         skip_refine: if True, generate only (no student validation or refinement)
         resume_from: if set, skip the Builder and load repos from this directory's
                      build_manifest.json (files already on disk)
+        initial_build: if set, skip the Builder and use this BuildResult directly
+                       (files not yet on disk — will be written on first iteration)
         console: optional rich.Console for pretty-printed progress
     """
     def log(msg: str):
@@ -202,6 +205,9 @@ def run_pipeline(
         build_result, topic = load_build_manifest(resume_from)
         output_dir = resume_from  # evaluate in the same dir
         ref_dir = output_dir / "reference_solutions"
+    elif initial_build:
+        log(f"\n[bold cyan]Using pre-built repos...[/bold cyan]" if console else "\nUsing pre-built repos...")
+        build_result = initial_build
     else:
         log(f"\n[bold cyan]Building challenges...[/bold cyan]" if console else "\nBuilding challenges...")
         build_result = build_challenges(
@@ -334,6 +340,86 @@ def run_pipeline(
     _update_lessons_learned(result)
 
     return result
+
+
+def amend_pipeline(
+    amend_dir: Path,
+    new_challenge_descriptions: list[str],
+    instructor_notes: str = "",
+    max_iterations: int = config.MAX_ITERATIONS,
+    skip_novice: bool = False,
+    skip_refine: bool = False,
+    console=None,
+) -> RunResult:
+    """
+    Amend an existing output directory: add new challenges or modify existing ones.
+
+    Loads the existing build manifest, reads current files from disk, calls the
+    Builder with amendment context, then runs the full eval pipeline on the result.
+
+    Args:
+        amend_dir: path to an existing output directory (must contain build_manifest.json)
+        new_challenge_descriptions: new challenge descriptions to add (can be empty if
+                                    amending via instructor_notes alone)
+        instructor_notes: instructions for modifying/extending existing challenges
+        max_iterations: refinement loop limit
+        skip_novice: skip novice student pass
+        skip_refine: write amended repos only, skip all student evaluation
+        console: optional rich.Console for pretty output
+    """
+    def log(msg: str):
+        if console:
+            console.print(msg)
+        else:
+            print(msg)
+
+    # Load existing manifest and read files from disk
+    build_result, topic = load_build_manifest(amend_dir)
+    prior_files: dict[str, dict[str, str]] = {}
+    for repo in build_result.repos:
+        repo_path = amend_dir / repo.name
+        if repo_path.is_dir():
+            prior_files[repo.name] = read_repo_files(repo_path)
+
+    # Build the amendment instruction for the Builder
+    amend_parts: list[str] = []
+    if new_challenge_descriptions:
+        amend_parts.append(
+            "Add the following new challenge(s) to the appropriate existing repo, "
+            "or create a new repo if they don't fit the existing ones:"
+        )
+        for desc in new_challenge_descriptions:
+            amend_parts.append(f"- {desc}")
+    if instructor_notes:
+        if amend_parts:
+            amend_parts.append("")
+        amend_parts.append(f"Additional instructions: {instructor_notes}")
+    amend_instructions = "\n".join(amend_parts)
+
+    # Full challenge scope = existing challenges + any new ones
+    all_descriptions = [c for repo in build_result.repos for c in repo.challenges]
+    all_descriptions.extend(new_challenge_descriptions)
+
+    log(f"\n[bold cyan]Amending challenges in {amend_dir}...[/bold cyan]" if console else f"\nAmending challenges in {amend_dir}...")
+    amended_build = build_challenges(
+        challenge_descriptions=all_descriptions,
+        topic=topic,
+        instructor_notes=instructor_notes,
+        amend_instructions=amend_instructions,
+        prior_files=prior_files,
+    )
+
+    return run_pipeline(
+        challenge_descriptions=[],
+        topic=topic,
+        output_dir=amend_dir,
+        instructor_notes=instructor_notes,
+        max_iterations=max_iterations,
+        skip_novice=skip_novice,
+        skip_refine=skip_refine,
+        initial_build=amended_build,
+        console=console,
+    )
 
 
 def _update_lessons_learned(result: RunResult) -> None:

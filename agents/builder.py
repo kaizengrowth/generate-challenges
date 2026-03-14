@@ -138,6 +138,7 @@ def build_challenges(
     instructor_notes: str = "",
     revision_feedback: str = "",
     prior_files: dict[str, dict[str, str]] | None = None,
+    amend_instructions: str = "",
 ) -> BuildResult:
     """
     Generate challenge repos from a list of challenge descriptions.
@@ -147,7 +148,9 @@ def build_challenges(
         topic: the broader topic (used to look up knowledge base)
         instructor_notes: any additional guidance from the instructor
         revision_feedback: structured feedback from student agents (for refinement iterations)
-        prior_files: files from a previous build attempt (for refinement iterations)
+        prior_files: files from a previous build attempt (for refinement or amend context)
+        amend_instructions: when set, instructs the builder to amend existing repos rather
+                            than generate from scratch; prior_files holds the existing repos
     """
     ref_docs = _load_reference_docs()
     kb = _load_knowledge_base(topic)
@@ -155,7 +158,16 @@ def build_challenges(
     # Build the user message
     parts = []
 
-    parts.append("## Challenges to Generate\n")
+    if amend_instructions:
+        parts.append(
+            "## Amendment Mode\n\n"
+            "You are amending an existing set of challenge repos. "
+            "Return ALL repos with their COMPLETE file sets — not just the changed ones. "
+            "For repos you did not touch, copy their files exactly as-is."
+        )
+        parts.append(f"\n## Amendment Instructions\n{amend_instructions}")
+
+    parts.append("\n## Challenges (complete scope)\n" if amend_instructions else "## Challenges to Generate\n")
     for i, desc in enumerate(challenge_descriptions, 1):
         parts.append(f"{i}. {desc}")
 
@@ -174,7 +186,12 @@ def build_challenges(
         )
 
     if prior_files:
-        parts.append("\n## Your Previous Output (for revision context)")
+        label = (
+            "## Existing Repos (preserve all content; return COMPLETE file sets for ALL repos)"
+            if amend_instructions else
+            "## Your Previous Output (for revision context)"
+        )
+        parts.append(f"\n{label}")
         for repo_name, files in prior_files.items():
             parts.append(f"\n### Repo: {repo_name}")
             parts.append(format_files_for_prompt(files))
@@ -190,6 +207,13 @@ def build_challenges(
     )
 
     data = parse_json_from_response(raw, context="Builder")
+
+    if "repos" not in data:
+        raise ValueError(
+            f"Builder response missing 'repos' key.\n"
+            f"Got keys: {list(data.keys())}\n"
+            f"Response (first 500 chars): {raw[:500]}"
+        )
 
     repos = []
     for r in data["repos"]:

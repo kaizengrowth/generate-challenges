@@ -29,6 +29,11 @@ python main.py --challenge "Build a click counter" --challenge "Build a toggle"
 # Resume after a crash — skip the Builder, reuse repos already on disk
 python main.py --resume-from output/react-state-management
 
+# Amend an existing output — add challenges or extend/modify existing ones
+python main.py --amend output/react-hooks --challenge "Add useCallback challenge"
+python main.py --amend output/react-hooks --notes "Make the stale closure challenge harder"
+python main.py --amend output/react-hooks --challenge "Add debounce challenge" --notes "Keep same difficulty level"
+
 # Common flags
 --no-refine        # generate only, skip student validation (fastest)
 --skip-novice      # skip novice student pass, only run expert (faster)

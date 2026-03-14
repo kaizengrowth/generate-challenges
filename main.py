@@ -7,6 +7,8 @@ Usage:
   python main.py generate --topic "React state management" --no-refine
   python main.py generate --topic "React state management" --skip-novice
   python main.py generate --challenge "Build a click counter in React" --challenge "Build a toggle"
+  python main.py generate --amend output/react-hooks --challenge "Add useCallback challenge"
+  python main.py generate --amend output/react-hooks --notes "Make the stale closure challenge harder"
 """
 
 import re
@@ -22,7 +24,7 @@ from rich.prompt import Prompt
 
 import config
 from agents.recommender import recommend_challenges, ChallengeCandidate
-from agents.orchestrator import run_pipeline, MANIFEST_FILENAME
+from agents.orchestrator import run_pipeline, amend_pipeline, MANIFEST_FILENAME
 from tools import token_tracker
 
 app = typer.Typer(help="Generate coding challenges for bootcamp students.")
@@ -39,8 +41,41 @@ def generate(
     no_refine: Annotated[bool, typer.Option("--no-refine", help="Generate only, no student validation")] = False,
     notes: Annotated[Optional[str], typer.Option("--notes", "-n", help="Instructor notes for the builder")] = None,
     resume_from: Annotated[Optional[str], typer.Option("--resume-from", "-r", help="Resume evaluation from an existing output dir (skips Builder)")] = None,
+    amend: Annotated[Optional[str], typer.Option("--amend", "-a", help="Add/extend challenges in an existing output dir")] = None,
 ):
     """Generate coding challenges from a topic or explicit challenge descriptions."""
+
+    # ── Amend mode — add/extend challenges in an existing output dir ─────────
+    if amend:
+        if not challenge and not notes:
+            console.print("[red]Error: --amend requires at least --challenge or --notes[/red]")
+            raise typer.Exit(1)
+
+        amend_path = Path(amend)
+        if not (amend_path / MANIFEST_FILENAME).exists():
+            console.print(f"[red]Error: no {MANIFEST_FILENAME} found in {amend_path}[/red]")
+            console.print("Make sure this path was produced by a previous run of this tool.")
+            raise typer.Exit(1)
+
+        console.print(Panel(
+            f"[bold]Amending:[/bold] {amend_path}\n"
+            f"[bold]New challenges:[/bold] {len(challenge) if challenge else 0}\n"
+            f"[bold]Notes:[/bold] {notes or '(none)'}\n"
+            f"[bold]Max iterations:[/bold] {max_iterations if not no_refine else 'N/A (--no-refine)'}",
+            title="Challenge Amendment",
+        ))
+
+        result = amend_pipeline(
+            amend_dir=amend_path,
+            new_challenge_descriptions=list(challenge) if challenge else [],
+            instructor_notes=notes or "",
+            max_iterations=max_iterations,
+            skip_novice=skip_novice,
+            skip_refine=no_refine,
+            console=console,
+        )
+        _print_results(result, amend_path)
+        return
 
     # ── Resume mode — skip recommender + builder ─────────────────────────────
     if resume_from:
@@ -69,7 +104,7 @@ def generate(
         return
 
     if not topic and not challenge:
-        console.print("[red]Error: provide --topic, --challenge, or --resume-from[/red]")
+        console.print("[red]Error: provide --topic, --challenge, --resume-from, or --amend[/red]")
         raise typer.Exit(1)
 
     # ── Determine challenge descriptions ────────────────────────────────────

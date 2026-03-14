@@ -6,7 +6,7 @@ import pytest
 
 import config
 from tools import token_tracker
-from tools.llm_client import call_llm
+from tools.llm_client import call_llm, parse_json_from_response
 
 
 class TestApiMode:
@@ -176,8 +176,8 @@ class TestCliMode:
             with pytest.raises(RuntimeError, match="Claude CLI failed"):
                 call_llm(system="s", user="u", model="claude-sonnet-4-6", max_tokens=100)
 
-    def test_system_prompt_included_in_stdin(self, monkeypatch):
-        """System prompt and user message are combined and passed via stdin."""
+    def test_system_prompt_passed_via_flag(self, monkeypatch):
+        """System prompt is passed via --system-prompt flag; only user message goes to stdin."""
         monkeypatch.setattr(config, "USE_CLAUDE_CLI", True)
         mock_proc = MagicMock()
         mock_proc.returncode = 0
@@ -186,11 +186,39 @@ class TestCliMode:
         with patch("tools.llm_client.subprocess.run", return_value=mock_proc) as mock_run:
             call_llm(system="MY SYSTEM PROMPT", user="user msg", model="claude-sonnet-4-6", max_tokens=100)
 
-        # The combined prompt is passed via stdin (input= kwarg), not as a positional arg
+        cmd = mock_run.call_args.args[0]
+        assert "--system-prompt" in cmd
+        system_idx = cmd.index("--system-prompt")
+        assert cmd[system_idx + 1] == "MY SYSTEM PROMPT"
+
         call_kwargs = mock_run.call_args.kwargs
-        combined_prompt = call_kwargs["input"]
-        assert "MY SYSTEM PROMPT" in combined_prompt
-        assert "user msg" in combined_prompt
+        assert call_kwargs["input"] == "user msg"
+
+    def test_cli_command_includes_no_session_persistence(self, monkeypatch):
+        monkeypatch.setattr(config, "USE_CLAUDE_CLI", True)
+        mock_proc = MagicMock()
+        mock_proc.returncode = 0
+        mock_proc.stdout = "ok"
+
+        with patch("tools.llm_client.subprocess.run", return_value=mock_proc) as mock_run:
+            call_llm(system="s", user="u", model="claude-sonnet-4-6", max_tokens=100)
+
+        cmd = mock_run.call_args.args[0]
+        assert "--no-session-persistence" in cmd
+
+    def test_cli_command_includes_output_format_text(self, monkeypatch):
+        monkeypatch.setattr(config, "USE_CLAUDE_CLI", True)
+        mock_proc = MagicMock()
+        mock_proc.returncode = 0
+        mock_proc.stdout = "ok"
+
+        with patch("tools.llm_client.subprocess.run", return_value=mock_proc) as mock_run:
+            call_llm(system="s", user="u", model="claude-sonnet-4-6", max_tokens=100)
+
+        cmd = mock_run.call_args.args[0]
+        assert "--output-format" in cmd
+        fmt_idx = cmd.index("--output-format")
+        assert cmd[fmt_idx + 1] == "text"
 
     def test_cli_strips_anthropic_api_key_from_env(self, monkeypatch):
         """ANTHROPIC_API_KEY must not leak into the CLI process (placeholder key causes auth failure)."""
@@ -238,8 +266,8 @@ class TestCliMode:
 
         assert token_tracker.is_estimated() is True
 
-    def test_cli_estimated_input_tokens_from_combined_prompt(self, monkeypatch):
-        """Input token estimate = len(combined_prompt) // 4."""
+    def test_cli_estimated_input_tokens_from_system_plus_user(self, monkeypatch):
+        """Input token estimate = (len(system) + len(user)) // 4."""
         monkeypatch.setattr(config, "USE_CLAUDE_CLI", True)
         mock_proc = MagicMock()
         mock_proc.returncode = 0
@@ -247,10 +275,7 @@ class TestCliMode:
 
         system = "X" * 100
         user = "Y" * 100
-        # combined = "<system>\n" + "X"*100 + "\n</system>\n\n" + "Y"*100
-        # = 9 + 100 + 12 + 100 = 221 chars → 221 // 4 = 55 estimated input tokens
-        expected_combined = f"<system>\n{system}\n</system>\n\n{user}"
-        expected_input = len(expected_combined) // 4
+        expected_input = (len(system) + len(user)) // 4  # 200 // 4 = 50
 
         with patch("tools.llm_client.subprocess.run", return_value=mock_proc):
             call_llm(system=system, user=user, model="claude-sonnet-4-6", max_tokens=100, agent="TestAgent")
@@ -268,3 +293,71 @@ class TestCliMode:
             call_llm(system="s", user="u", model="claude-sonnet-4-6", max_tokens=100, agent="TestAgent")
 
         assert token_tracker.get_usage()["TestAgent"].output_tokens == 80 // 4
+
+
+class TestParseJsonFromResponse:
+    def test_pure_json(self):
+        raw = '{"key": "value", "n": 42}'
+        assert parse_json_from_response(raw) == {"key": "value", "n": 42}
+
+    def test_json_with_leading_trailing_whitespace(self):
+        raw = '  \n{"x": 1}\n  '
+        assert parse_json_from_response(raw) == {"x": 1}
+
+    def test_json_in_fence_at_start(self):
+        raw = '```\n{"a": 1}\n```'
+        assert parse_json_from_response(raw) == {"a": 1}
+
+    def test_json_in_fence_with_language_specifier(self):
+        raw = '```json\n{"a": 1}\n```'
+        assert parse_json_from_response(raw) == {"a": 1}
+
+    def test_json_in_fence_after_preamble(self):
+        raw = 'Here is the JSON:\n\n```json\n{"result": true}\n```'
+        assert parse_json_from_response(raw) == {"result": True}
+
+    def test_json_in_fence_after_long_preamble(self):
+        raw = (
+            "Now I have everything I need to produce the complete review. "
+            "Let me compile the final JSON:\n"
+            "```json\n"
+            '{"issues": [], "passed": true}\n'
+            "```"
+        )
+        assert parse_json_from_response(raw) == {"issues": [], "passed": True}
+
+    def test_bare_json_after_preamble(self):
+        """Brace-index fallback: 'Here is the result: {...}'"""
+        raw = 'Here is the result: {"status": "ok"}'
+        assert parse_json_from_response(raw) == {"status": "ok"}
+
+    def test_empty_string_raises(self):
+        with pytest.raises(ValueError, match="empty response"):
+            parse_json_from_response("")
+
+    def test_whitespace_only_raises(self):
+        with pytest.raises(ValueError, match="empty response"):
+            parse_json_from_response("   \n  ")
+
+    def test_plain_text_raises(self):
+        with pytest.raises(ValueError, match="invalid JSON"):
+            parse_json_from_response("This is just plain text with no JSON at all.")
+
+    def test_invalid_json_in_fence_raises(self):
+        raw = "```json\nnot valid json\n```"
+        with pytest.raises(ValueError, match="invalid JSON"):
+            parse_json_from_response(raw)
+
+    def test_context_appears_in_error_message(self):
+        with pytest.raises(ValueError, match="Builder"):
+            parse_json_from_response("no json here", context="Builder")
+
+    def test_nested_json_object(self):
+        raw = '{"repos": [{"name": "foo", "files": {"a.ts": "export {}"}}]}'
+        result = parse_json_from_response(raw)
+        assert result["repos"][0]["name"] == "foo"
+
+    def test_fence_without_closing_backticks_uses_full_inner_content(self):
+        """When no closing fence is found, treat everything after the first fence line as JSON."""
+        raw = '```json\n{"partial": true}'
+        assert parse_json_from_response(raw) == {"partial": True}

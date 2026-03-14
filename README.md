@@ -59,6 +59,12 @@ If the pipeline crashed during student evaluation, resume from where it left off
 python main.py --resume-from output/react-state-management
 ```
 
+### Amend an existing output — add challenges or extend/modify existing ones
+
+python main.py --amend output/react-hooks --challenge "Add useCallback challenge"
+python main.py --amend output/react-hooks --notes "Make the stale closure challenge harder"
+python main.py --amend output/react-hooks --challenge "Add debounce challenge" --notes "Keep same difficulty level"
+
 ### Common flags
 
 ```bash
