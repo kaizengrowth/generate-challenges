@@ -13,6 +13,7 @@ import difflib
 import json
 import shutil
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -280,18 +281,25 @@ def run_pipeline(
                 repo_paths = write_repos(current_build, output_dir)
                 repo_path = repo_paths[0]
 
-            # Expert student
-            log("    Expert student evaluating...")
-            expert_fb = expert_evaluate(current_repo, repo_path)
-            log(f"    Tests passed: {expert_fb.tests_passed}")
-
-            # Novice student
+            # Run expert + novice in parallel (or just expert if --skip-novice)
             if not skip_novice:
-                log("    Novice student evaluating...")
-                novice_fb = novice_evaluate(current_repo, repo_path)
-                log(f"    Clarity score: {novice_fb.clarity_score}/5")
+                log("    Evaluating (expert + novice)...", end="")
+                _t = time.time()
+                with ThreadPoolExecutor(max_workers=2) as executor:
+                    expert_future = executor.submit(expert_evaluate, current_repo, repo_path)
+                    novice_future = executor.submit(novice_evaluate, current_repo, repo_path)
+                    expert_fb = expert_future.result()
+                    novice_fb = novice_future.result()
+                log(f" done ({round(time.time() - _t)}s)")
             else:
+                log("    Expert student evaluating...", end="")
+                _t = time.time()
+                expert_fb = expert_evaluate(current_repo, repo_path)
+                log(f" done ({round(time.time() - _t)}s)")
                 novice_fb = NoviceFeedback(clarity_score=5, difficulty_assessment="appropriate")
+            log(f"    Tests passed: {expert_fb.tests_passed}")
+            if not skip_novice:
+                log(f"    Clarity score: {novice_fb.clarity_score}/5")
 
             # Log this iteration
             log_entry: dict = {

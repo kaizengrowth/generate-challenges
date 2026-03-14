@@ -6,7 +6,6 @@ bootcamp student's perspective: README clarity, test name quality, difficulty, m
 """
 
 import json
-import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -93,8 +92,6 @@ def evaluate_repo(
         f"## All Challenge Files\n\n{format_files_for_prompt(all_files)}"
     )
 
-    print("      White-box pass...", end="", flush=True)
-    _t = time.time()
     wb_raw = call_llm(
         system=WHITEBOX_SYSTEM_PROMPT,
         user=wb_prompt,
@@ -102,7 +99,6 @@ def evaluate_repo(
         max_tokens=config.STUDENT_MAX_TOKENS,
         agent="Novice Student",
     )
-    print(f" done ({round(time.time() - _t)}s)")
     wb_data = parse_json_from_response(wb_raw, context="Novice Student")
 
     return NoviceFeedback(

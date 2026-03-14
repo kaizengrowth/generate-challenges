@@ -7,7 +7,6 @@ Reads all challenge files, writes a reference solution, and runs the tests to ve
 import json
 import shutil
 import tempfile
-import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -104,8 +103,6 @@ def evaluate_repo(repo: ChallengeRepo, repo_dir: Path) -> ExpertFeedback:
         f"## All Challenge Files\n\n{format_files_for_prompt(all_files)}"
     )
 
-    print("      White-box pass...", end="", flush=True)
-    _t = time.time()
     wb_raw = call_llm(
         system=WHITEBOX_SYSTEM_PROMPT,
         user=whitebox_prompt,
@@ -113,7 +110,6 @@ def evaluate_repo(repo: ChallengeRepo, repo_dir: Path) -> ExpertFeedback:
         max_tokens=config.STUDENT_MAX_TOKENS,
         agent="Expert Student",
     )
-    print(f" done ({round(time.time() - _t)}s)")
     wb_data = parse_json_from_response(wb_raw, context="Expert Student (white-box)")
 
     solution_files = wb_data.get("solution_files", {})

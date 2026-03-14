@@ -2,7 +2,6 @@
 
 import os
 import subprocess
-import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -32,8 +31,6 @@ def run_tests(repo_dir: Path, install_command: str, test_command: str) -> TestRe
     env = {**os.environ, "CI": "true"}
 
     # Install dependencies
-    print(f"      Installing dependencies ({install_command})...", end="", flush=True)
-    _t = time.time()
     install_result = subprocess.run(
         install_command,
         shell=True,
@@ -43,7 +40,6 @@ def run_tests(repo_dir: Path, install_command: str, test_command: str) -> TestRe
         timeout=300,
         env=env,
     )
-    print(f" done ({round(time.time() - _t)}s)")
     if install_result.returncode != 0:
         combined = (
             f"[INSTALL FAILED]\nstdout: {install_result.stdout}\nstderr: {install_result.stderr}"
@@ -56,8 +52,6 @@ def run_tests(repo_dir: Path, install_command: str, test_command: str) -> TestRe
         )
 
     # Run tests
-    print(f"      Running tests ({test_command})...", end="", flush=True)
-    _t = time.time()
     test_result = subprocess.run(
         test_command,
         shell=True,
@@ -67,7 +61,6 @@ def run_tests(repo_dir: Path, install_command: str, test_command: str) -> TestRe
         timeout=300,
         env=env,
     )
-    print(f" done ({round(time.time() - _t)}s)")
     combined = ""
     if test_result.stdout:
         combined += test_result.stdout
