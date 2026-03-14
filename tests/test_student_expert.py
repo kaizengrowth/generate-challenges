@@ -12,7 +12,6 @@ from agents.student_expert import (
     save_reference_solution,
 )
 from tests.conftest import (
-    EXPERT_BLACKBOX_RESPONSE,
     EXPERT_WHITEBOX_RESPONSE,
     EXPERT_WHITEBOX_WITH_ISSUES,
     make_challenge_repo,
@@ -74,7 +73,6 @@ class TestExpertFeedbackDataclass:
             infrastructure_issues=["missing tsconfig"],
             test_quality_issues=["bad assertion"],
             technical_issues=["wrong import"],
-            error_message_quality=["unclear message"],
         )
         text = fb.to_feedback_text()
         assert "Infrastructure Issues" in text
@@ -90,17 +88,12 @@ class TestExpertFeedbackDataclass:
 
 
 class TestEvaluateRepo:
-    def _call_llm_responses(self, *responses):
-        """Returns a side_effect list for call_llm that cycles through responses."""
-        return list(responses)
-
     def test_returns_expert_feedback(self, tmp_path):
         repo = make_challenge_repo()
         (tmp_path / "README.md").write_text("# Test")
 
-        with patch("agents.student_expert.call_llm") as mock_llm, \
+        with patch("agents.student_expert.call_llm", return_value=EXPERT_WHITEBOX_RESPONSE), \
              patch("agents.student_expert.run_tests", return_value=_make_test_result(True)):
-            mock_llm.side_effect = [EXPERT_WHITEBOX_RESPONSE, EXPERT_BLACKBOX_RESPONSE]
             result = evaluate_repo(repo, tmp_path)
 
         assert isinstance(result, ExpertFeedback)
@@ -109,9 +102,8 @@ class TestEvaluateRepo:
         repo = make_challenge_repo()
         (tmp_path / "README.md").write_text("# Test")
 
-        with patch("agents.student_expert.call_llm") as mock_llm, \
+        with patch("agents.student_expert.call_llm", return_value=EXPERT_WHITEBOX_RESPONSE), \
              patch("agents.student_expert.run_tests", return_value=_make_test_result(True)):
-            mock_llm.side_effect = [EXPERT_WHITEBOX_RESPONSE, EXPERT_BLACKBOX_RESPONSE]
             result = evaluate_repo(repo, tmp_path)
 
         assert result.tests_passed is True
@@ -120,9 +112,8 @@ class TestEvaluateRepo:
         repo = make_challenge_repo()
         (tmp_path / "README.md").write_text("# Test")
 
-        with patch("agents.student_expert.call_llm") as mock_llm, \
+        with patch("agents.student_expert.call_llm", return_value=EXPERT_WHITEBOX_RESPONSE), \
              patch("agents.student_expert.run_tests", return_value=_make_test_result(False)):
-            mock_llm.side_effect = [EXPERT_WHITEBOX_RESPONSE, EXPERT_BLACKBOX_RESPONSE]
             result = evaluate_repo(repo, tmp_path)
 
         assert result.tests_passed is False
@@ -132,9 +123,8 @@ class TestEvaluateRepo:
         repo = make_challenge_repo()
         (tmp_path / "README.md").write_text("# Test")
 
-        with patch("agents.student_expert.call_llm") as mock_llm, \
+        with patch("agents.student_expert.call_llm", return_value=EXPERT_WHITEBOX_WITH_ISSUES), \
              patch("agents.student_expert.run_tests", return_value=_make_test_result(True)):
-            mock_llm.side_effect = [EXPERT_WHITEBOX_WITH_ISSUES, EXPERT_BLACKBOX_RESPONSE]
             result = evaluate_repo(repo, tmp_path)
 
         assert "Missing tsconfig.json" in result.infrastructure_issues
@@ -145,44 +135,29 @@ class TestEvaluateRepo:
         repo = make_challenge_repo()
         (tmp_path / "README.md").write_text("# Test")
 
-        with patch("agents.student_expert.call_llm") as mock_llm, \
+        with patch("agents.student_expert.call_llm", return_value=EXPERT_WHITEBOX_RESPONSE), \
              patch("agents.student_expert.run_tests", return_value=_make_test_result(True)):
-            mock_llm.side_effect = [EXPERT_WHITEBOX_RESPONSE, EXPERT_BLACKBOX_RESPONSE]
             result = evaluate_repo(repo, tmp_path)
 
         assert "src/ClickCounter.tsx" in result.solution_files
 
-    def test_error_message_quality_from_blackbox(self, tmp_path):
+    def test_one_llm_call_made(self, tmp_path):
         repo = make_challenge_repo()
         (tmp_path / "README.md").write_text("# Test")
 
-        with patch("agents.student_expert.call_llm") as mock_llm, \
+        with patch("agents.student_expert.call_llm", return_value=EXPERT_WHITEBOX_RESPONSE) as mock_llm, \
              patch("agents.student_expert.run_tests", return_value=_make_test_result(True)):
-            mock_llm.side_effect = [EXPERT_WHITEBOX_RESPONSE, EXPERT_BLACKBOX_RESPONSE]
-            result = evaluate_repo(repo, tmp_path)
-
-        assert len(result.error_message_quality) > 0
-
-    def test_two_llm_calls_made(self, tmp_path):
-        repo = make_challenge_repo()
-        (tmp_path / "README.md").write_text("# Test")
-
-        with patch("agents.student_expert.call_llm") as mock_llm, \
-             patch("agents.student_expert.run_tests", return_value=_make_test_result(True)):
-            mock_llm.side_effect = [EXPERT_WHITEBOX_RESPONSE, EXPERT_BLACKBOX_RESPONSE]
             evaluate_repo(repo, tmp_path)
 
-        assert mock_llm.call_count == 2
+        assert mock_llm.call_count == 1
 
     def test_strips_markdown_fences_from_response(self, tmp_path):
         repo = make_challenge_repo()
         (tmp_path / "README.md").write_text("# Test")
-        fenced_wb = f"```json\n{EXPERT_WHITEBOX_RESPONSE}\n```"
-        fenced_bb = f"```json\n{EXPERT_BLACKBOX_RESPONSE}\n```"
+        fenced = f"```json\n{EXPERT_WHITEBOX_RESPONSE}\n```"
 
-        with patch("agents.student_expert.call_llm") as mock_llm, \
+        with patch("agents.student_expert.call_llm", return_value=fenced), \
              patch("agents.student_expert.run_tests", return_value=_make_test_result(True)):
-            mock_llm.side_effect = [fenced_wb, fenced_bb]
             result = evaluate_repo(repo, tmp_path)
 
         assert isinstance(result, ExpertFeedback)

@@ -6,8 +6,8 @@ Key design decisions:
   tests never read/write the real knowledge_base or output directories.
 - Factory helpers (make_challenge_repo, make_expert_feedback, make_novice_feedback)
   produce valid dataclass instances with sensible defaults.
-- Canonical JSON strings (BUILDER_RESPONSE etc.) are the mock LLM responses
-  used across agent tests.
+- Canonical JSON strings (PLANNER_RESPONSE, GENERATOR_RESPONSE, etc.) are the
+  mock LLM responses used across agent tests.
 """
 
 import json
@@ -21,40 +21,53 @@ from tools import token_tracker
 
 # ── Canonical mock LLM response strings ──────────────────────────────────────
 
-BUILDER_RESPONSE = json.dumps({
+# Planner response: lightweight call that decides clustering + ecosystem.
+PLANNER_RESPONSE = json.dumps({
     "repos": [
         {
             "name": "click-counter",
             "description": "A React click counter challenge",
             "challenges": ["Click Counter"],
+            "ecosystem": "react",
             "install_command": "npm install",
             "test_command": "npm test",
-            "files": {
-                "README.md": "# Click Counter\nBuild a click counter.",
-                "package.json": '{"name":"click-counter","scripts":{"test":"vitest"}}',
-                "src/ClickCounter.tsx": "export default function ClickCounter() { return null; }",
-                ".gitignore": "node_modules/",
-            },
+            "creative_files": ["README.md", "src/ClickCounter.tsx"],
+            "is_ui": True,
         }
     ],
     "clustering_rationale": "Single challenge, single repo",
     "challenge_type_notes": "",
 })
 
-BUILDER_RESPONSE_WITH_NOTES = json.dumps({
+# Planner response variant with non-empty challenge_type_notes.
+PLANNER_RESPONSE_WITH_NOTES = json.dumps({
     "repos": [
         {
             "name": "debug-challenge",
             "description": "A debugging challenge",
             "challenges": ["Fix the Bug"],
+            "ecosystem": "node",
             "install_command": "npm install",
             "test_command": "npm test",
-            "files": {"README.md": "# Debug\nFind the bug."},
+            "creative_files": ["README.md"],
+            "is_ui": False,
         }
     ],
     "clustering_rationale": "Single repo",
     "challenge_type_notes": "For debugging challenges, provide broken code with logic errors.",
 })
+
+# Generator response: per-repo file generation call.
+GENERATOR_RESPONSE = json.dumps({
+    "files": {
+        "README.md": "# Click Counter\nBuild a click counter.",
+        "src/ClickCounter.tsx": "export default function ClickCounter() { return null; }",
+    },
+})
+
+# Kept for backward-compat with any tests that still import it.
+BUILDER_RESPONSE = PLANNER_RESPONSE
+BUILDER_RESPONSE_WITH_NOTES = PLANNER_RESPONSE_WITH_NOTES
 
 EXPERT_WHITEBOX_RESPONSE = json.dumps({
     "infrastructure_issues": [],
@@ -72,10 +85,6 @@ EXPERT_WHITEBOX_WITH_ISSUES = json.dumps({
     "solution_files": {"src/ClickCounter.tsx": "// solution"},
 })
 
-EXPERT_BLACKBOX_RESPONSE = json.dumps({
-    "error_message_quality": ["Messages clearly indicate what needs to be implemented"],
-})
-
 NOVICE_WHITEBOX_RESPONSE = json.dumps({
     "clarity_score": 4,
     "difficulty_assessment": "appropriate",
@@ -90,10 +99,6 @@ NOVICE_WHITEBOX_WITH_ISSUES = json.dumps({
     "confusion_points": ["The term 'memoization' is not explained"],
     "missing_context": ["No example output provided"],
     "test_name_quality": [],
-})
-
-NOVICE_BLACKBOX_RESPONSE = json.dumps({
-    "error_message_quality": ["Error messages are actionable"],
 })
 
 RECOMMENDER_RESPONSE = json.dumps({
@@ -177,7 +182,6 @@ def make_expert_feedback(tests_passed: bool = True, **kwargs) -> ExpertFeedback:
         technical_issues=[],
         test_quality_issues=[],
         infrastructure_issues=[],
-        error_message_quality=[],
         solution_files={"src/ClickCounter.tsx": "// solution"},
     )
     defaults.update(kwargs)
@@ -191,7 +195,6 @@ def make_novice_feedback(clarity_score: int = 5, **kwargs) -> NoviceFeedback:
         confusion_points=[],
         missing_context=[],
         test_name_quality=[],
-        error_message_quality=[],
     )
     defaults.update(kwargs)
     return NoviceFeedback(**defaults)

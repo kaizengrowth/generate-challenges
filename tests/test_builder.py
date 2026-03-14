@@ -13,26 +13,39 @@ from agents.builder import (
     build_challenges,
     write_repos,
 )
-from tests.conftest import BUILDER_RESPONSE, BUILDER_RESPONSE_WITH_NOTES
+from tests.conftest import (
+    PLANNER_RESPONSE,
+    PLANNER_RESPONSE_WITH_NOTES,
+    GENERATOR_RESPONSE,
+)
+
+
+# Helpers to build two-call side_effect lists for the normal flow
+# (plan_challenges call + generate_repo call).
+def _normal_side_effect():
+    return [PLANNER_RESPONSE, GENERATOR_RESPONSE]
+
+def _notes_side_effect():
+    return [PLANNER_RESPONSE_WITH_NOTES, GENERATOR_RESPONSE]
 
 
 class TestBuildChallenges:
     def test_returns_build_result(self):
-        with patch("agents.builder.call_llm", return_value=BUILDER_RESPONSE), \
-             patch("agents.builder._load_reference_docs", return_value=""):
+        with patch("agents.builder.call_llm", side_effect=_normal_side_effect()), \
+             patch("agents.builder._load_filtered_reference_docs", return_value=""):
             result = build_challenges(["Build a click counter"])
         assert isinstance(result, BuildResult)
 
     def test_repos_contain_challenge_repo(self):
-        with patch("agents.builder.call_llm", return_value=BUILDER_RESPONSE), \
-             patch("agents.builder._load_reference_docs", return_value=""):
+        with patch("agents.builder.call_llm", side_effect=_normal_side_effect()), \
+             patch("agents.builder._load_filtered_reference_docs", return_value=""):
             result = build_challenges(["Build a click counter"])
         assert len(result.repos) == 1
         assert isinstance(result.repos[0], ChallengeRepo)
 
     def test_repo_fields_populated(self):
-        with patch("agents.builder.call_llm", return_value=BUILDER_RESPONSE), \
-             patch("agents.builder._load_reference_docs", return_value=""):
+        with patch("agents.builder.call_llm", side_effect=_normal_side_effect()), \
+             patch("agents.builder._load_filtered_reference_docs", return_value=""):
             result = build_challenges(["Build a click counter"])
         repo = result.repos[0]
         assert repo.name == "click-counter"
@@ -42,47 +55,54 @@ class TestBuildChallenges:
         assert repo.test_command == "npm test"
 
     def test_repo_files_populated(self):
-        with patch("agents.builder.call_llm", return_value=BUILDER_RESPONSE), \
-             patch("agents.builder._load_reference_docs", return_value=""):
+        with patch("agents.builder.call_llm", side_effect=_normal_side_effect()), \
+             patch("agents.builder._load_filtered_reference_docs", return_value=""):
             result = build_challenges(["Build a click counter"])
         assert "README.md" in result.repos[0].files
         assert "src/ClickCounter.tsx" in result.repos[0].files
 
     def test_strips_markdown_fences(self):
-        fenced = f"```json\n{BUILDER_RESPONSE}\n```"
-        with patch("agents.builder.call_llm", return_value=fenced), \
-             patch("agents.builder._load_reference_docs", return_value=""):
+        fenced_plan = f"```json\n{PLANNER_RESPONSE}\n```"
+        fenced_gen = f"```json\n{GENERATOR_RESPONSE}\n```"
+        with patch("agents.builder.call_llm", side_effect=[fenced_plan, fenced_gen]), \
+             patch("agents.builder._load_filtered_reference_docs", return_value=""):
             result = build_challenges(["Build a click counter"])
         assert len(result.repos) == 1
 
     def test_passes_descriptions_to_llm(self):
-        with patch("agents.builder.call_llm", return_value=BUILDER_RESPONSE) as mock_llm, \
-             patch("agents.builder._load_reference_docs", return_value=""):
+        with patch("agents.builder.call_llm", side_effect=_normal_side_effect()) as mock_llm, \
+             patch("agents.builder._load_filtered_reference_docs", return_value=""):
             build_challenges(["Build a click counter", "Build a toggle"])
-        user_msg = mock_llm.call_args.kwargs["user"]
-        assert "Build a click counter" in user_msg
-        assert "Build a toggle" in user_msg
+        # Descriptions go into the planner call (first LLM call)
+        planner_user_msg = mock_llm.call_args_list[0].kwargs["user"]
+        assert "Build a click counter" in planner_user_msg
+        assert "Build a toggle" in planner_user_msg
 
     def test_passes_instructor_notes_to_llm(self):
-        with patch("agents.builder.call_llm", return_value=BUILDER_RESPONSE) as mock_llm, \
-             patch("agents.builder._load_reference_docs", return_value=""):
+        with patch("agents.builder.call_llm", side_effect=_normal_side_effect()) as mock_llm, \
+             patch("agents.builder._load_filtered_reference_docs", return_value=""):
             build_challenges(["Build something"], instructor_notes="Focus on TypeScript")
-        user_msg = mock_llm.call_args.kwargs["user"]
-        assert "Focus on TypeScript" in user_msg
+        # Notes go into the planner call (first LLM call)
+        planner_user_msg = mock_llm.call_args_list[0].kwargs["user"]
+        assert "Focus on TypeScript" in planner_user_msg
 
     def test_passes_revision_feedback_to_llm(self):
-        with patch("agents.builder.call_llm", return_value=BUILDER_RESPONSE) as mock_llm, \
-             patch("agents.builder._load_reference_docs", return_value=""):
+        # Revision path requires both revision_feedback AND prior_files.
+        prior = {"click-counter": {"README.md": "old readme"}}
+        with patch("agents.builder.call_llm", return_value=GENERATOR_RESPONSE) as mock_llm, \
+             patch("agents.builder._load_filtered_reference_docs", return_value=""):
             build_challenges(
                 ["Build something"],
                 revision_feedback="Tests are broken — fix the import paths",
+                prior_files=prior,
             )
+        # Revision uses a single targeted LLM call (_revise_repo)
         user_msg = mock_llm.call_args.kwargs["user"]
         assert "Tests are broken" in user_msg
 
     def test_saves_challenge_type_notes_to_knowledge_base(self):
-        with patch("agents.builder.call_llm", return_value=BUILDER_RESPONSE_WITH_NOTES), \
-             patch("agents.builder._load_reference_docs", return_value=""):
+        with patch("agents.builder.call_llm", side_effect=_notes_side_effect()), \
+             patch("agents.builder._load_filtered_reference_docs", return_value=""):
             build_challenges(["Fix the bug"], topic="debugging")
 
         # KB file should have been created
@@ -91,8 +111,8 @@ class TestBuildChallenges:
         assert "For debugging challenges" in kb_files[0].read_text()
 
     def test_skips_empty_challenge_type_notes(self):
-        with patch("agents.builder.call_llm", return_value=BUILDER_RESPONSE), \
-             patch("agents.builder._load_reference_docs", return_value=""):
+        with patch("agents.builder.call_llm", side_effect=_normal_side_effect()), \
+             patch("agents.builder._load_filtered_reference_docs", return_value=""):
             build_challenges(["Build something"], topic="react")
 
         # No KB file should have been created (notes were empty)
@@ -103,8 +123,8 @@ class TestBuildChallenges:
         existing = config.CHALLENGE_TYPES_DIR / "debugging.md"
         existing.write_text("# Debugging\n\nOld content.")
 
-        with patch("agents.builder.call_llm", return_value=BUILDER_RESPONSE_WITH_NOTES), \
-             patch("agents.builder._load_reference_docs", return_value=""):
+        with patch("agents.builder.call_llm", side_effect=_notes_side_effect()), \
+             patch("agents.builder._load_filtered_reference_docs", return_value=""):
             build_challenges(["Fix the bug"], topic="debugging")
 
         content = existing.read_text()
@@ -115,17 +135,18 @@ class TestBuildChallenges:
         # Write a KB file to simulate existing knowledge
         (config.CHALLENGE_TYPES_DIR / "react.md").write_text("React KB content here.")
 
-        with patch("agents.builder.call_llm", return_value=BUILDER_RESPONSE) as mock_llm, \
-             patch("agents.builder._load_reference_docs", return_value=""):
+        with patch("agents.builder.call_llm", side_effect=_normal_side_effect()) as mock_llm, \
+             patch("agents.builder._load_filtered_reference_docs", return_value=""):
             build_challenges(["Build something"], topic="react")
 
-        user_msg = mock_llm.call_args.kwargs["user"]
-        assert "React KB content here." in user_msg
+        # KB is injected into the planner call (first LLM call)
+        planner_user_msg = mock_llm.call_args_list[0].kwargs["user"]
+        assert "React KB content here." in planner_user_msg
 
     def test_prior_files_included_in_revision_prompt(self):
         prior = {"click-counter": {"README.md": "old readme"}}
-        with patch("agents.builder.call_llm", return_value=BUILDER_RESPONSE) as mock_llm, \
-             patch("agents.builder._load_reference_docs", return_value=""):
+        with patch("agents.builder.call_llm", return_value=GENERATOR_RESPONSE) as mock_llm, \
+             patch("agents.builder._load_filtered_reference_docs", return_value=""):
             build_challenges(
                 ["Build something"],
                 revision_feedback="Fix it",

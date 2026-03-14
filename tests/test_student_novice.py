@@ -8,7 +8,6 @@ import pytest
 from agents.builder import ChallengeRepo
 from agents.student_novice import NoviceFeedback, evaluate_repo
 from tests.conftest import (
-    NOVICE_BLACKBOX_RESPONSE,
     NOVICE_WHITEBOX_RESPONSE,
     NOVICE_WHITEBOX_WITH_ISSUES,
     make_challenge_repo,
@@ -83,9 +82,8 @@ class TestEvaluateRepo:
         repo = make_challenge_repo()
         (tmp_path / "README.md").write_text("# Test")
 
-        with patch("agents.student_novice.call_llm") as mock_llm:
-            mock_llm.side_effect = [NOVICE_WHITEBOX_RESPONSE, NOVICE_BLACKBOX_RESPONSE]
-            result = evaluate_repo(repo, tmp_path, test_output="test output here")
+        with patch("agents.student_novice.call_llm", return_value=NOVICE_WHITEBOX_RESPONSE):
+            result = evaluate_repo(repo, tmp_path)
 
         assert isinstance(result, NoviceFeedback)
 
@@ -93,9 +91,8 @@ class TestEvaluateRepo:
         repo = make_challenge_repo()
         (tmp_path / "README.md").write_text("# Test")
 
-        with patch("agents.student_novice.call_llm") as mock_llm:
-            mock_llm.side_effect = [NOVICE_WHITEBOX_RESPONSE, NOVICE_BLACKBOX_RESPONSE]
-            result = evaluate_repo(repo, tmp_path, test_output="")
+        with patch("agents.student_novice.call_llm", return_value=NOVICE_WHITEBOX_RESPONSE):
+            result = evaluate_repo(repo, tmp_path)
 
         assert result.clarity_score == 4
 
@@ -103,9 +100,8 @@ class TestEvaluateRepo:
         repo = make_challenge_repo()
         (tmp_path / "README.md").write_text("# Test")
 
-        with patch("agents.student_novice.call_llm") as mock_llm:
-            mock_llm.side_effect = [NOVICE_WHITEBOX_RESPONSE, NOVICE_BLACKBOX_RESPONSE]
-            result = evaluate_repo(repo, tmp_path, test_output="")
+        with patch("agents.student_novice.call_llm", return_value=NOVICE_WHITEBOX_RESPONSE):
+            result = evaluate_repo(repo, tmp_path)
 
         assert result.difficulty_assessment == "appropriate"
 
@@ -113,54 +109,29 @@ class TestEvaluateRepo:
         repo = make_challenge_repo()
         (tmp_path / "README.md").write_text("# Test")
 
-        with patch("agents.student_novice.call_llm") as mock_llm:
-            mock_llm.side_effect = [NOVICE_WHITEBOX_WITH_ISSUES, NOVICE_BLACKBOX_RESPONSE]
-            result = evaluate_repo(repo, tmp_path, test_output="")
+        with patch("agents.student_novice.call_llm", return_value=NOVICE_WHITEBOX_WITH_ISSUES):
+            result = evaluate_repo(repo, tmp_path)
 
         assert result.clarity_score == 2
         assert result.difficulty_assessment == "too hard"
         assert "The term 'memoization' is not explained" in result.confusion_points
         assert "No example output provided" in result.missing_context
 
-    def test_test_output_passed_to_blackbox_llm(self, tmp_path):
+    def test_one_llm_call_made(self, tmp_path):
         repo = make_challenge_repo()
         (tmp_path / "README.md").write_text("# Test")
 
-        with patch("agents.student_novice.call_llm") as mock_llm:
-            mock_llm.side_effect = [NOVICE_WHITEBOX_RESPONSE, NOVICE_BLACKBOX_RESPONSE]
-            evaluate_repo(repo, tmp_path, test_output="FAIL: expected 3 but got undefined")
+        with patch("agents.student_novice.call_llm", return_value=NOVICE_WHITEBOX_RESPONSE) as mock_llm:
+            evaluate_repo(repo, tmp_path)
 
-        bb_call = mock_llm.call_args_list[1]
-        assert "FAIL: expected 3 but got undefined" in bb_call.kwargs["user"]
-
-    def test_two_llm_calls_made(self, tmp_path):
-        repo = make_challenge_repo()
-        (tmp_path / "README.md").write_text("# Test")
-
-        with patch("agents.student_novice.call_llm") as mock_llm:
-            mock_llm.side_effect = [NOVICE_WHITEBOX_RESPONSE, NOVICE_BLACKBOX_RESPONSE]
-            evaluate_repo(repo, tmp_path, test_output="")
-
-        assert mock_llm.call_count == 2
+        assert mock_llm.call_count == 1
 
     def test_strips_markdown_fences(self, tmp_path):
         repo = make_challenge_repo()
         (tmp_path / "README.md").write_text("# Test")
-        fenced_wb = f"```json\n{NOVICE_WHITEBOX_RESPONSE}\n```"
-        fenced_bb = f"```json\n{NOVICE_BLACKBOX_RESPONSE}\n```"
+        fenced = f"```json\n{NOVICE_WHITEBOX_RESPONSE}\n```"
 
-        with patch("agents.student_novice.call_llm") as mock_llm:
-            mock_llm.side_effect = [fenced_wb, fenced_bb]
-            result = evaluate_repo(repo, tmp_path, test_output="")
+        with patch("agents.student_novice.call_llm", return_value=fenced):
+            result = evaluate_repo(repo, tmp_path)
 
         assert isinstance(result, NoviceFeedback)
-
-    def test_error_message_quality_from_blackbox(self, tmp_path):
-        repo = make_challenge_repo()
-        (tmp_path / "README.md").write_text("# Test")
-
-        with patch("agents.student_novice.call_llm") as mock_llm:
-            mock_llm.side_effect = [NOVICE_WHITEBOX_RESPONSE, NOVICE_BLACKBOX_RESPONSE]
-            result = evaluate_repo(repo, tmp_path, test_output="")
-
-        assert "Error messages are actionable" in result.error_message_quality
