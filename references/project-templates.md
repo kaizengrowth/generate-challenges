@@ -21,6 +21,7 @@ Select the template that matches the detected language/framework. When a templat
 ```
 
 Add `tsx` and a `start` script only if the README mentions running a file directly:
+
 ```json
 {
   "type": "module",
@@ -57,8 +58,11 @@ Add `tsx` and a `start` script only if the README mentions running a file direct
 
 ```
 npm install
-npm test      # stops at first failure (--bail 1); fix one test at a time
+npm test                                    # run all challenges; stops at first failure
+npm test challengeName       # run one challenge only
 ```
+
+Replace `challengeName` with the actual test file name for that challenge.
 
 ---
 
@@ -120,8 +124,8 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     globals: true,
-    setupFiles: "./src/setupTests.ts",
-  },
+    setupFiles: "./src/setupTests.ts"
+  }
 });
 ```
 
@@ -233,9 +237,12 @@ export default App;
 
 ```
 npm install
-npm test        # stops at first failure (--bail 1); fix one test at a time
-npm run dev     # open in browser for visual testing
+npm test                                         # run all challenges; stops at first failure
+npm test challengeName           # run one challenge only
+npm run dev                                      # open in browser for visual testing
 ```
+
+Replace `challengeName` with the actual test file name for that challenge.
 
 ---
 
@@ -311,12 +318,12 @@ module.exports = function (config) {
       require("karma-chrome-launcher"),
       require("karma-jasmine-html-reporter"),
       require("karma-coverage"),
-      require("@angular-devkit/build-angular/plugins/karma"),
+      require("@angular-devkit/build-angular/plugins/karma")
     ],
     reporters: ["progress"],
     browsers: ["ChromeHeadless"],
     singleRun: true,
-    bail: true,   // stop after the first test failure
+    bail: true // stop after the first test failure
   });
 };
 ```
@@ -364,7 +371,7 @@ import { ChallengeComponent } from "./challenge/challenge.component";
 @NgModule({
   declarations: [AppComponent, ChallengeComponent],
   imports: [BrowserModule],
-  bootstrap: [AppComponent],
+  bootstrap: [AppComponent]
 })
 export class AppModule {}
 ```
@@ -390,7 +397,7 @@ import { Component } from "@angular/core";
       </section>
       <!-- Add one <section class="card challenge-section"> per challenge component -->
     </div>
-  `,
+  `
 })
 export class AppComponent {}
 ```
@@ -444,9 +451,12 @@ Minimal Angular workspace config required for `ng serve` and `ng test`.
 
 ```
 npm install
-npm test        # stops at first failure (bail: true); fix one test at a time
-ng serve        # open in browser for visual testing (http://localhost:4200)
+npm test                                                             # run all challenges; stops at first failure
+ng test --include="src/app/challenge-name/challenge-name.spec.ts"   # run one challenge only
+ng serve                                                             # open in browser for visual testing (http://localhost:4200)
 ```
+
+Replace the `--include` path with the actual spec file path for that challenge.
 
 ---
 
@@ -473,9 +483,11 @@ tests/
 
 ```
 pip install -r requirements.txt
-pytest -x       # stops at first failure (-x); fix one test at a time
-pytest -x -v    # same but verbose — shows each test name with pass/fail
+pytest -x                                   # run all challenges; stops at first failure
+pytest tests/test_challenge_name.py -v      # run one challenge only
 ```
+
+Replace `tests/test_challenge_name.py` with the actual test file path for that challenge.
 
 ---
 
@@ -619,9 +631,11 @@ com.challenge.support.ChallengeTestListener
 ### Running
 
 ```
-mvn test                        # all challenges; stops after first failing challenge
-mvn test -Dtest=ClassNameTest   # single challenge by test class name
+mvn test                          # run all challenges; stops after first failing challenge
+mvn test -Dtest=ClassNameTest     # run one challenge only
 ```
+
+Replace `ClassNameTest` with the actual test class name for that challenge (e.g. `StackTest`).
 
 ---
 
@@ -671,10 +685,11 @@ CMakeLists.txt
 ```
 cmake -S . -B build
 cmake --build build
-cd build && ctest --stop-on-failure --output-on-failure
+cd build && ctest --stop-on-failure --output-on-failure           # run all challenges
+cd build && ctest -R ClassNameTest --output-on-failure            # run one challenge only
 ```
 
-`--stop-on-failure` (CMake 3.16+) stops after the first failing test.
+Replace `ClassNameTest` with the actual test target name for that challenge. `--stop-on-failure` requires CMake 3.16+.
 
 ---
 
@@ -712,8 +727,8 @@ export default defineConfig({
   plugins: [vue()],
   test: {
     environment: "jsdom",
-    globals: true,
-  },
+    globals: true
+  }
 });
 ```
 
@@ -803,9 +818,12 @@ import ComponentName from "./ComponentName.vue";
 
 ```
 npm install
-npm test        # stops at first failure (--bail 1); fix one test at a time
-npm run dev     # open in browser for visual testing
+npm test                                       # run all challenges; stops at first failure
+npm test -- src/ComponentName.test.ts          # run one challenge only
+npm run dev                                    # open in browser for visual testing
 ```
+
+Replace `src/ComponentName.test.ts` with the actual test file path for that challenge.
 
 ---
 
@@ -923,12 +941,12 @@ echo ""
 
 ### Key behaviours to know when writing test patterns
 
-| Situation | What to expect | Pattern approach |
-|---|---|---|
-| Numeric variable `PIC 9(5)` displaying 8 | Output: `00008` | Pattern `8` — substring match works |
-| String variable `PIC X(20)` storing "ALICE" | Output: `ALICE               ` (space-padded) | Pattern `ALICE` — substring match works |
-| Single letter grade "C" | "C" appears in words like "SCORE" | Use `\bC\b` for word-boundary match |
-| Test input appears in output | e.g., input `1000` → output may echo `001000` | Pick test inputs whose expected result does NOT appear as a substring of the inputs |
+| Situation                                   | What to expect                                | Pattern approach                                                                    |
+| ------------------------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Numeric variable `PIC 9(5)` displaying 8    | Output: `00008`                               | Pattern `8` — substring match works                                                 |
+| String variable `PIC X(20)` storing "ALICE" | Output: `ALICE               ` (space-padded) | Pattern `ALICE` — substring match works                                             |
+| Single letter grade "C"                     | "C" appears in words like "SCORE"             | Use `\bC\b` for word-boundary match                                                 |
+| Test input appears in output                | e.g., input `1000` → output may echo `001000` | Pick test inputs whose expected result does NOT appear as a substring of the inputs |
 
 ### Running
 
