@@ -453,15 +453,57 @@ def amend_pipeline(
 
 
 def _update_lessons_learned(result: RunResult) -> None:
-    """Append a summary of this run's lessons to lessons_learned.md."""
-    lines = [f"\n## Run: {result.topic}\n"]
+    """Append generalised lessons from this run to lessons_learned.md.
+
+    Raw feedback items are sent through an LLM that strips challenge-specific
+    details and extracts reusable principles, grouped by theme.
+    """
+    # Collect every raw issue from every outcome that needed refinement
+    raw_issues: list[str] = []
     for o in result.outcomes:
         if o.expert_feedback.has_issues or o.novice_feedback.has_issues:
-            lines.append(f"### {o.repo.name} (resolved after {o.iterations} iteration(s))")
             for issue in o.expert_feedback.technical_issues:
-                lines.append(f"- Technical: {issue}")
+                raw_issues.append(f"[Technical] {issue}")
+            for issue in o.expert_feedback.test_quality_issues:
+                raw_issues.append(f"[Test quality] {issue}")
+            for issue in o.expert_feedback.infrastructure_issues:
+                raw_issues.append(f"[Infrastructure] {issue}")
             for issue in o.novice_feedback.confusion_points:
-                lines.append(f"- Clarity: {issue}")
-    if len(lines) > 1:
-        with open(config.LESSONS_LEARNED, "a") as f:
-            f.write("\n".join(lines) + "\n")
+                raw_issues.append(f"[Clarity] {issue}")
+            for issue in o.novice_feedback.missing_context:
+                raw_issues.append(f"[Missing context] {issue}")
+
+    if not raw_issues:
+        return
+
+    issues_block = "\n".join(f"- {i}" for i in raw_issues)
+    system = (
+        "You are a curriculum-design expert. Your job is to distil raw feedback "
+        "from student reviewers into reusable, general lessons for challenge authors. "
+        "Output only plain Markdown — no preamble, no JSON, no code fences."
+    )
+    user = f"""The following issues were found while reviewing coding challenges on the topic "{result.topic}".
+
+{issues_block}
+
+Extract the general, reusable lessons that apply beyond these specific challenges. Follow these rules:
+- Remove all references to specific challenge names, file names, variable names, or code snippets.
+- Each lesson must be a principle that would apply to many challenges, not just the ones reviewed.
+- Group related issues into a single lesson rather than listing each one separately.
+- Where the issues cluster around a specific technology (e.g. React, TypeScript, REST APIs), you may scope the lesson to that technology — but keep it general within that scope.
+- Write each lesson as one or two concrete, actionable sentences.
+- Use a short `### Category` heading before each group (e.g. ### Hints and Guidance, ### Skeleton Files, ### Test Complexity, ### React).
+- Omit any category that has no lessons.
+- Do not repeat lessons already obvious from the category heading."""
+
+    generalised = call_llm(
+        system=system,
+        user=user,
+        model=config.SUMMARIZE_CHANGES_MODEL,
+        max_tokens=1024,
+        agent="Lessons Learned",
+    )
+
+    with open(config.LESSONS_LEARNED, "a") as f:
+        f.write(f"\n## Run: {result.topic}\n\n")
+        f.write(generalised.strip() + "\n")

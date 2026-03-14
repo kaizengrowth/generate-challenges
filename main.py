@@ -192,7 +192,7 @@ def _print_token_report() -> None:
     token_table.add_column(f"Total {label}", justify="right", style="bold")
 
     # Preferred display order
-    order = ["Recommender", "Builder (Planner)", "Builder", "Expert Student", "Novice Student", "Change Summarizer"]
+    order = ["Recommender", "Builder (Planner)", "Builder", "Expert Student", "Novice Student", "Change Summarizer", "Lessons Learned"]
     agents = [a for a in order if a in usage] + [a for a in usage if a not in order]
 
     for agent in agents:
