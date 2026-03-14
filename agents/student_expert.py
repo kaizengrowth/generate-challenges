@@ -1,9 +1,7 @@
 """
 Expert Student Agent — attempts to solve challenges, runs tests, evaluates quality.
 
-Runs two passes:
-  White-box: reads test source code to evaluate test quality
-  Black-box: reviews only test runner output to evaluate student experience
+Reads all challenge files, writes a reference solution, and runs the tests to verify it passes.
 """
 
 import json
@@ -26,14 +24,8 @@ class ExpertFeedback:
     tests_passed: bool
     test_output: str  # raw output from test runner
 
-    # White-box findings (from reading test source)
     test_quality_issues: list[str] = field(default_factory=list)
     infrastructure_issues: list[str] = field(default_factory=list)
-
-    # Black-box findings (from reviewing test runner output)
-    error_message_quality: list[str] = field(default_factory=list)
-
-    # General technical issues
     technical_issues: list[str] = field(default_factory=list)
 
     # Reference solution files (relative_path -> content)
@@ -63,8 +55,6 @@ class ExpertFeedback:
             parts.append("### Test Quality Issues\n" + "\n".join(f"- {i}" for i in self.test_quality_issues))
         if self.technical_issues:
             parts.append("### Technical Issues\n" + "\n".join(f"- {i}" for i in self.technical_issues))
-        if self.error_message_quality:
-            parts.append("### Error Message Quality (from student perspective)\n" + "\n".join(f"- {i}" for i in self.error_message_quality))
         return "\n\n".join(parts)
 
 
@@ -97,37 +87,13 @@ Rules:
 - Output ONLY the JSON, no markdown fences
 """
 
-BLACKBOX_SYSTEM_PROMPT = """You are reviewing a coding challenge from a student's perspective.
-You can ONLY see the test runner output — you cannot see the test source code.
-
-Your job: evaluate the quality of the test output as a learning experience.
-
-Questions to consider:
-- Are the failure messages clear enough for a student to understand what they need to implement?
-- Do the error messages point students in the right direction?
-- Are there confusing or misleading error messages?
-- Would a student know what to do next based only on these messages?
-
-Output ONLY a valid JSON object:
-{
-  "error_message_quality": ["issue or observation 1", "issue or observation 2"]
-}
-
-Rules:
-- Focus on actionability of failure messages for a student who doesn't know the solution
-- If error messages are clear and helpful, note that as a positive ("error messages clearly indicate X")
-- If messages are confusing, explain why and what would be better
-- Output ONLY the JSON, no markdown fences
-"""
-
 
 def evaluate_repo(repo: ChallengeRepo, repo_dir: Path) -> ExpertFeedback:
     """
     Run expert student evaluation on a challenge repo.
 
-    1. White-box pass: read test source, write solution, evaluate quality
-    2. Run the solution's tests
-    3. Black-box pass: evaluate test runner output
+    1. Read all files, evaluate test quality, write a reference solution
+    2. Run the solution's tests and verify they pass
     """
     all_files = read_repo_files(repo_dir)
 
@@ -158,24 +124,6 @@ def evaluate_repo(repo: ChallengeRepo, repo_dir: Path) -> ExpertFeedback:
     # ── Run the solution ────────────────────────────────────────────────────
     test_result = _run_solution(repo, repo_dir, solution_files)
 
-    # ── Black-box pass ──────────────────────────────────────────────────────
-    bb_prompt = (
-        f"Challenge: {repo.description}\n\n"
-        f"Test runner output after a student attempt:\n```\n{test_result.combined}\n```"
-    )
-
-    print("      Black-box pass...", end="", flush=True)
-    _t = time.time()
-    bb_raw = call_llm(
-        system=BLACKBOX_SYSTEM_PROMPT,
-        user=bb_prompt,
-        model=config.EXPERT_STUDENT_MODEL,
-        max_tokens=1000,
-        agent="Expert Student",
-    )
-    print(f" done ({round(time.time() - _t)}s)")
-    bb_data = parse_json_from_response(bb_raw, context="Expert Student (black-box)")
-
     return ExpertFeedback(
         solved=test_result.passed,
         tests_passed=test_result.passed,
@@ -183,7 +131,6 @@ def evaluate_repo(repo: ChallengeRepo, repo_dir: Path) -> ExpertFeedback:
         test_quality_issues=test_quality_issues,
         infrastructure_issues=infrastructure_issues,
         technical_issues=technical_issues,
-        error_message_quality=bb_data.get("error_message_quality", []),
         solution_files=solution_files,
     )
 

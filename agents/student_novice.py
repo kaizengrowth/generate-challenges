@@ -1,9 +1,8 @@
 """
 Novice Student Agent — evaluates challenge clarity and pedagogy.
 
-Runs two passes:
-  White-box: can see test source — evaluates test names, descriptions, whether tests reveal too much
-  Black-box: can only see test runner output — evaluates if a student would know what to do next
+Reads all challenge files (including test source) and evaluates from a confused
+bootcamp student's perspective: README clarity, test name quality, difficulty, missing context.
 """
 
 import json
@@ -23,8 +22,7 @@ class NoviceFeedback:
     difficulty_assessment: str  # "too easy" | "appropriate" | "too hard"
     confusion_points: list[str] = field(default_factory=list)
     missing_context: list[str] = field(default_factory=list)
-    test_name_quality: list[str] = field(default_factory=list)  # white-box
-    error_message_quality: list[str] = field(default_factory=list)  # black-box
+    test_name_quality: list[str] = field(default_factory=list)
 
     @property
     def has_issues(self) -> bool:
@@ -42,8 +40,6 @@ class NoviceFeedback:
             parts.append("### Missing Context\n" + "\n".join(f"- {m}" for m in self.missing_context))
         if self.test_name_quality:
             parts.append("### Test Name/Description Quality\n" + "\n".join(f"- {t}" for t in self.test_name_quality))
-        if self.error_message_quality:
-            parts.append("### Error Message Feedback\n" + "\n".join(f"- {e}" for e in self.error_message_quality))
         return "\n\n".join(parts)
 
 
@@ -76,31 +72,10 @@ Rules:
 - Output ONLY the JSON, no markdown fences
 """
 
-BLACKBOX_SYSTEM_PROMPT = """You are a student midway through a coding bootcamp. You have just run the tests
-on a challenge for the first time. You can ONLY see the test runner output — not the test source code.
-
-Evaluate the test output as a learning experience:
-- Can you tell from the failure messages what you need to implement?
-- Are the error messages helpful or cryptic?
-- Would you know what to do next?
-
-Output ONLY a valid JSON object:
-{
-  "error_message_quality": ["observation 1", "observation 2"]
-}
-
-Rules:
-- Focus on whether failure messages guide students toward the solution
-- Be specific — quote actual error text when commenting on it
-- If messages are clear, say so (e.g., "Error 'expected undefined to be a function' clearly tells me I need to define the method")
-- Output ONLY the JSON, no markdown fences
-"""
-
 
 def evaluate_repo(
     repo: ChallengeRepo,
     repo_dir: Path,
-    test_output: str,
 ) -> NoviceFeedback:
     """
     Run novice student evaluation on a challenge repo.
@@ -108,9 +83,7 @@ def evaluate_repo(
     Args:
         repo: the ChallengeRepo metadata
         repo_dir: path to the repo on disk
-        test_output: raw test runner output (from expert student's test run)
     """
-    # Exclude test files for white-box pass — wait, novice CAN see tests in white-box
     all_files = read_repo_files(repo_dir)
 
     # ── White-box pass ──────────────────────────────────────────────────────
@@ -130,26 +103,7 @@ def evaluate_repo(
         agent="Novice Student",
     )
     print(f" done ({round(time.time() - _t)}s)")
-    wb_data = parse_json_from_response(wb_raw, context="Novice Student (white-box)")
-
-    # ── Black-box pass ──────────────────────────────────────────────────────
-    bb_prompt = (
-        f"Challenge topic: {repo.description}\n\n"
-        f"Test runner output (first run with skeleton code, before I've implemented anything):\n"
-        f"```\n{test_output}\n```"
-    )
-
-    print("      Black-box pass...", end="", flush=True)
-    _t = time.time()
-    bb_raw = call_llm(
-        system=BLACKBOX_SYSTEM_PROMPT,
-        user=bb_prompt,
-        model=config.NOVICE_STUDENT_MODEL,
-        max_tokens=1000,
-        agent="Novice Student",
-    )
-    print(f" done ({round(time.time() - _t)}s)")
-    bb_data = parse_json_from_response(bb_raw, context="Novice Student (black-box)")
+    wb_data = parse_json_from_response(wb_raw, context="Novice Student")
 
     return NoviceFeedback(
         clarity_score=wb_data.get("clarity_score", 3),
@@ -157,5 +111,4 @@ def evaluate_repo(
         confusion_points=wb_data.get("confusion_points", []),
         missing_context=wb_data.get("missing_context", []),
         test_name_quality=wb_data.get("test_name_quality", []),
-        error_message_quality=bb_data.get("error_message_quality", []),
     )

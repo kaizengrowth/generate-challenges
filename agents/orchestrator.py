@@ -288,7 +288,7 @@ def run_pipeline(
             # Novice student
             if not skip_novice:
                 log("    Novice student evaluating...")
-                novice_fb = novice_evaluate(current_repo, repo_path, expert_fb.test_output)
+                novice_fb = novice_evaluate(current_repo, repo_path)
                 log(f"    Clarity score: {novice_fb.clarity_score}/5")
             else:
                 novice_fb = NoviceFeedback(clarity_score=5, difficulty_assessment="appropriate")
