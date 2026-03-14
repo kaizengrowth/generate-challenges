@@ -9,6 +9,7 @@ Runs two passes:
 import json
 import shutil
 import tempfile
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -50,7 +51,12 @@ class ExpertFeedback:
     def to_feedback_text(self) -> str:
         parts = []
         if not self.tests_passed:
-            parts.append(f"### Tests did not pass\nTest output:\n```\n{self.test_output}\n```")
+            lines = self.test_output.splitlines()
+            if len(lines) > 100:
+                output = "\n".join(lines[:100]) + f"\n... ({len(lines) - 100} more lines truncated)"
+            else:
+                output = self.test_output
+            parts.append(f"### Tests did not pass\nTest output:\n```\n{output}\n```")
         if self.infrastructure_issues:
             parts.append("### Infrastructure Issues\n" + "\n".join(f"- {i}" for i in self.infrastructure_issues))
         if self.test_quality_issues:
@@ -132,6 +138,8 @@ def evaluate_repo(repo: ChallengeRepo, repo_dir: Path) -> ExpertFeedback:
         f"## All Challenge Files\n\n{format_files_for_prompt(all_files)}"
     )
 
+    print("      White-box pass...", end="", flush=True)
+    _t = time.time()
     wb_raw = call_llm(
         system=WHITEBOX_SYSTEM_PROMPT,
         user=whitebox_prompt,
@@ -139,6 +147,7 @@ def evaluate_repo(repo: ChallengeRepo, repo_dir: Path) -> ExpertFeedback:
         max_tokens=config.STUDENT_MAX_TOKENS,
         agent="Expert Student",
     )
+    print(f" done ({round(time.time() - _t)}s)")
     wb_data = parse_json_from_response(wb_raw, context="Expert Student (white-box)")
 
     solution_files = wb_data.get("solution_files", {})
@@ -155,6 +164,8 @@ def evaluate_repo(repo: ChallengeRepo, repo_dir: Path) -> ExpertFeedback:
         f"Test runner output after a student attempt:\n```\n{test_result.combined}\n```"
     )
 
+    print("      Black-box pass...", end="", flush=True)
+    _t = time.time()
     bb_raw = call_llm(
         system=BLACKBOX_SYSTEM_PROMPT,
         user=bb_prompt,
@@ -162,6 +173,7 @@ def evaluate_repo(repo: ChallengeRepo, repo_dir: Path) -> ExpertFeedback:
         max_tokens=1000,
         agent="Expert Student",
     )
+    print(f" done ({round(time.time() - _t)}s)")
     bb_data = parse_json_from_response(bb_raw, context="Expert Student (black-box)")
 
     return ExpertFeedback(

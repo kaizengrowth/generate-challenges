@@ -24,6 +24,7 @@ OUTPUT_DIR = ROOT / "output"
 USE_CLAUDE_CLI: bool = os.getenv("USE_CLAUDE_CLI", "false").lower() == "true"
 
 # Models (used in API mode; CLI mode uses whatever model claude defaults to)
+PLANNER_MODEL = "claude-haiku-4-5-20251001"
 BUILDER_MODEL = "claude-sonnet-4-6"
 EXPERT_STUDENT_MODEL = "claude-sonnet-4-6"
 NOVICE_STUDENT_MODEL = "claude-haiku-4-5-20251001"
@@ -34,6 +35,7 @@ SUMMARIZE_CHANGES_MODEL = "claude-haiku-4-5-20251001"
 MAX_ITERATIONS = 2
 
 # Token limits (API mode only)
+PLANNER_MAX_TOKENS = 2000
 BUILDER_MAX_TOKENS = 16000
 STUDENT_MAX_TOKENS = 8000
 RECOMMENDER_MAX_TOKENS = 2000

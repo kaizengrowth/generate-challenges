@@ -7,6 +7,7 @@ Runs two passes:
 """
 
 import json
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -119,6 +120,8 @@ def evaluate_repo(
         f"## All Challenge Files\n\n{format_files_for_prompt(all_files)}"
     )
 
+    print("      White-box pass...", end="", flush=True)
+    _t = time.time()
     wb_raw = call_llm(
         system=WHITEBOX_SYSTEM_PROMPT,
         user=wb_prompt,
@@ -126,6 +129,7 @@ def evaluate_repo(
         max_tokens=config.STUDENT_MAX_TOKENS,
         agent="Novice Student",
     )
+    print(f" done ({round(time.time() - _t)}s)")
     wb_data = parse_json_from_response(wb_raw, context="Novice Student (white-box)")
 
     # ── Black-box pass ──────────────────────────────────────────────────────
@@ -135,6 +139,8 @@ def evaluate_repo(
         f"```\n{test_output}\n```"
     )
 
+    print("      Black-box pass...", end="", flush=True)
+    _t = time.time()
     bb_raw = call_llm(
         system=BLACKBOX_SYSTEM_PROMPT,
         user=bb_prompt,
@@ -142,6 +148,7 @@ def evaluate_repo(
         max_tokens=1000,
         agent="Novice Student",
     )
+    print(f" done ({round(time.time() - _t)}s)")
     bb_data = parse_json_from_response(bb_raw, context="Novice Student (black-box)")
 
     return NoviceFeedback(

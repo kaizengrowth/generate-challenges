@@ -24,3 +24,11 @@ about what works well (or poorly) when generating challenges.
 - Clarity: The README mentions 'renderHook' and explains it in detail, but as a student who just learned React hooks I might wonder why I need a special utility just to test a hook — the explanation helps but could feel overwhelming at first
 - Clarity: The phrase 'Cleans up the timer when the component unmounts or when value or delay changes' — the word 'unmounts' is React jargon that might not have been covered yet, though it is implicitly handled by useEffect cleanup
 - Clarity: The skeleton comment says 'return a cleanup function that clears the timer' — a student who hasn't seen cleanup functions before might not know the syntax (returning a function from useEffect)
+
+## Run: JavaScript closures
+
+### typescript-closure-patterns (resolved after 2 iteration(s))
+- Clarity: The phrase 'functional pipeline composition' in the topic title sounds intimidating — I wouldn't know what that means before reading the README, but the README explains it well enough
+- Clarity: The term 'middleware list' in the pipeline.ts comments might confuse me — 'middleware' is a backend/Express concept I may not have encountered yet in a closures lesson
+- Clarity: The `ReturnType<typeof createBankAccount>` TypeScript utility type used in the test file (`let account: ReturnType<typeof createBankAccount>`) could be confusing if I look at the test source, even though I'm not supposed to modify it
+- Clarity: The comment in pipeline.ts says `pipe(f, g, h)(x) === h(g(f(x)))` but that's actually the compose definition — pipe left-to-right would be `f(g(h(x)))` reversed, so `h(g(f(x)))` is correct for pipe but the visual order feels backwards and could cause a double-take

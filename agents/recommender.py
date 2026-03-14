@@ -5,6 +5,7 @@ The instructor reviews the suggestions and selects which ones to generate.
 """
 
 import json
+import time
 from dataclasses import dataclass
 
 import config
@@ -66,6 +67,8 @@ def recommend_challenges(topic: str, extra_context: str = "") -> list[ChallengeC
     if extra_context:
         prompt += f"\n\nAdditional context: {extra_context}"
 
+    print("  Generating suggestions...", end="", flush=True)
+    _t = time.time()
     raw = call_llm(
         system=RECOMMENDER_SYSTEM_PROMPT,
         user=prompt,
@@ -73,6 +76,7 @@ def recommend_challenges(topic: str, extra_context: str = "") -> list[ChallengeC
         max_tokens=config.RECOMMENDER_MAX_TOKENS,
         agent="Recommender",
     )
+    print(f" done ({round(time.time() - _t)}s)")
     data = parse_json_from_response(raw, context="Recommender")
     return [
         ChallengeCandidate(

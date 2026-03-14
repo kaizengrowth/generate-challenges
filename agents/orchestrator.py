@@ -12,11 +12,15 @@ Flow:
 import difflib
 import json
 import shutil
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-from agents.builder import ChallengeRepo, BuildResult, build_challenges, write_repos
+from agents.builder import (
+    ChallengeRepo, BuildResult, build_challenges, write_repos,
+    plan_challenges, generate_repo, _save_challenge_type_notes,
+)
 from agents.student_expert import ExpertFeedback, evaluate_repo as expert_evaluate, save_reference_solution
 from agents.student_novice import NoviceFeedback, evaluate_repo as novice_evaluate
 from tools.file_tools import read_repo_files
@@ -70,6 +74,7 @@ def save_build_manifest(build_result: BuildResult, output_dir: Path, topic: str)
                 "challenges": r.challenges,
                 "install_command": r.install_command,
                 "test_command": r.test_command,
+                "ecosystem": r.ecosystem,
             }
             for r in build_result.repos
         ],
@@ -102,6 +107,7 @@ def load_build_manifest(resume_dir: Path) -> tuple[BuildResult, str]:
             install_command=r["install_command"],
             test_command=r["test_command"],
             files={},  # already on disk — read_repo_files() fetches them when needed
+            ecosystem=r.get("ecosystem", ""),  # backward compat with old manifests
         )
         for r in data["repos"]
     ]
@@ -189,11 +195,11 @@ def run_pipeline(
                        (files not yet on disk — will be written on first iteration)
         console: optional rich.Console for pretty-printed progress
     """
-    def log(msg: str):
+    def log(msg: str, end: str = "\n"):
         if console:
-            console.print(msg)
+            console.print(msg, end=end)
         else:
-            print(msg)
+            print(msg, end=end, flush=True)
 
     output_dir.mkdir(parents=True, exist_ok=True)
     ref_dir = output_dir / "reference_solutions"
@@ -209,12 +215,29 @@ def run_pipeline(
         log(f"\n[bold cyan]Using pre-built repos...[/bold cyan]" if console else "\nUsing pre-built repos...")
         build_result = initial_build
     else:
-        log(f"\n[bold cyan]Building challenges...[/bold cyan]" if console else "\nBuilding challenges...")
-        build_result = build_challenges(
-            challenge_descriptions=challenge_descriptions,
-            topic=topic,
-            instructor_notes=instructor_notes,
-        )
+        # Phase 1: Plan (lightweight call to decide clustering + ecosystem)
+        log(f"\n[bold cyan]Planning challenges...[/bold cyan]" if console else "\nPlanning challenges...", end="")
+        _t = time.time()
+        plan = plan_challenges(challenge_descriptions, topic, instructor_notes)
+        log(f" done ({round(time.time() - _t)}s)")
+        log(f"  {len(plan.repos)} repo(s) planned: {', '.join(r.name for r in plan.repos)}")
+
+        # Phase 2: Generate each repo (filtered context, one at a time)
+        repos = []
+        for spec in plan.repos:
+            log(f"\n[bold cyan]  Building repo: {spec.name}...[/bold cyan]" if console
+                else f"\n  Building repo: {spec.name}...", end="")
+            _t = time.time()
+            repo = generate_repo(spec, topic, instructor_notes)
+            log(f" done ({round(time.time() - _t)}s)")
+            repos.append(repo)
+
+        # Save challenge type notes to knowledge base
+        notes = plan.challenge_type_notes.strip()
+        if notes and notes not in ("", "N/A", "None"):
+            _save_challenge_type_notes(topic or challenge_descriptions[0], notes)
+
+        build_result = BuildResult(repos=repos)
 
     result = RunResult(topic=topic, output_dir=output_dir)
 
@@ -299,8 +322,8 @@ def run_pipeline(
             feedback_summary = "\n\n".join(feedback_parts)
 
             prior_files = read_repo_files(repo_path)
-            log(f"    Issues found. Sending feedback to Builder...")
-
+            log(f"    Issues found. Rebuilding {current_repo.name}...", end="")
+            _t = time.time()
             try:
                 current_build = build_challenges(
                     challenge_descriptions=[current_repo.description],
@@ -310,11 +333,16 @@ def run_pipeline(
                     prior_files={current_repo.name: prior_files},
                 )
                 current_repo = current_build.repos[0]
-                pending_changes_summary = _summarize_changes(prior_files, current_repo.files)
             except (ValueError, KeyError) as e:
-                log(f"    [yellow]Builder refinement failed: {e}[/yellow]" if console else f"    Warning: Builder refinement failed: {e}")
+                log(f"\n    [yellow]Builder refinement failed: {e}[/yellow]" if console else f"\n    Warning: Builder refinement failed: {e}")
                 log(f"    Keeping current build and skipping further refinement.")
                 break
+            log(f" done ({round(time.time() - _t)}s)")
+
+            log(f"    Summarizing changes...", end="")
+            _t = time.time()
+            pending_changes_summary = _summarize_changes(prior_files, current_repo.files)
+            log(f" done ({round(time.time() - _t)}s)")
 
         # Save reference solution
         if expert_fb and expert_fb.solution_files:
@@ -367,11 +395,11 @@ def amend_pipeline(
         skip_refine: write amended repos only, skip all student evaluation
         console: optional rich.Console for pretty output
     """
-    def log(msg: str):
+    def log(msg: str, end: str = "\n"):
         if console:
-            console.print(msg)
+            console.print(msg, end=end)
         else:
-            print(msg)
+            print(msg, end=end, flush=True)
 
     # Load existing manifest and read files from disk
     build_result, topic = load_build_manifest(amend_dir)
@@ -400,7 +428,8 @@ def amend_pipeline(
     all_descriptions = [c for repo in build_result.repos for c in repo.challenges]
     all_descriptions.extend(new_challenge_descriptions)
 
-    log(f"\n[bold cyan]Amending challenges in {amend_dir}...[/bold cyan]" if console else f"\nAmending challenges in {amend_dir}...")
+    log(f"\n[bold cyan]Amending challenges in {amend_dir}...[/bold cyan]" if console else f"\nAmending challenges in {amend_dir}...", end="")
+    _t = time.time()
     amended_build = build_challenges(
         challenge_descriptions=all_descriptions,
         topic=topic,
@@ -408,6 +437,7 @@ def amend_pipeline(
         amend_instructions=amend_instructions,
         prior_files=prior_files,
     )
+    log(f" done ({round(time.time() - _t)}s)")
 
     return run_pipeline(
         challenge_descriptions=[],
