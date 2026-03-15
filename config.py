@@ -40,5 +40,13 @@ BUILDER_MAX_TOKENS = 16000
 STUDENT_MAX_TOKENS = 8000
 RECOMMENDER_MAX_TOKENS = 2000
 
+# Max creative files per LLM call (batches generation to avoid timeouts and truncation).
+# Applies to both CLI and API mode:
+#   CLI — each call is a subprocess with a 600s wall; large repos hit it without batching
+#   API — each call is bounded by BUILDER_MAX_TOKENS; batching prevents truncated JSON
+# Each file averages ~100-200 lines; 3 files ≈ 400-600 lines ≈ 1,500-2,500 output tokens
+# Lower values = more calls but each finishes faster; minimum useful value is 1
+BUILDER_MAX_FILES_PER_BATCH = 3
+
 # CLI mode timeout (seconds) — builder can generate large responses
 CLI_TIMEOUT = 600
