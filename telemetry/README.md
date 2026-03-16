@@ -12,17 +12,18 @@ This work is kept separate from the core challenge generation pipeline in the ro
 telemetry/
 ├── ARCHITECTURE.md        # System design, diagrams, data schema, deployment plan
 ├── README.md              # This file
-├── server/                # FastAPI ingest server + SQLite storage  (to build)
-│   ├── main.py
-│   ├── models.py
-│   ├── routes/
-│   │   ├── events.py      # POST /events/{cohort_id}
-│   │   ├── cohort.py      # GET  /cohort/{id}
-│   │   └── stream.py      # GET  /stream/{cohort_id}  (SSE)
-│   ├── db.py
+├── server/                # FastAPI ingest server + SQLite storage
+│   ├── main.py            # POST /events, GET /cohort/{id}, GET /stream/{id} (SSE)
+│   ├── db.py              # SQLite schema + query helpers
+│   ├── seed.py            # Pre-populates 3 realistic demo students
+│   ├── instructor.html    # Instructor dashboard (student grid, heatmap, live feed)
 │   └── requirements.txt
-└── dashboard/             # Instructor dashboard UI  (to build)
-    └── index.html
+└── demo-challenge/        # Manually scaffolded Stack challenge with telemetry
+    ├── src/Stack.ts       # Empty skeleton — implement to make tests pass
+    ├── src/telemetry/     # Telemetry module (auto-injected by Builder in all repos)
+    ├── tests/Stack.test.ts
+    ├── telemetry.config.json
+    └── progress.html      # Student self-view dashboard
 ```
 
 ## Related: Skill Layer

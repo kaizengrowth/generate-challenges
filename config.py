@@ -50,3 +50,11 @@ BUILDER_MAX_FILES_PER_BATCH = 3
 
 # CLI mode timeout (seconds) — builder can generate large responses
 CLI_TIMEOUT = 600
+
+# ── Telemetry ─────────────────────────────────────────────────────────────────
+# Set TELEMETRY_ENABLED=false to skip telemetry injection in generated repos.
+# Set TELEMETRY_ENDPOINT to pre-configure a remote server in every generated repo.
+#   e.g. TELEMETRY_ENDPOINT=http://localhost:8000/events
+# Leave unset (or empty) for local-only mode (events write to .telemetry/ only).
+TELEMETRY_ENABLED: bool = os.getenv("TELEMETRY_ENABLED", "true").lower() == "true"
+TELEMETRY_ENDPOINT: str | None = os.getenv("TELEMETRY_ENDPOINT") or None

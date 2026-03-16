@@ -19,6 +19,7 @@ from tools.file_tools import read_file, write_repo_files, format_files_for_promp
 from tools.llm_client import call_llm, parse_json_from_response
 from tools.repo_tools import git_init
 from tools.boilerplate import get_boilerplate
+from tools.telemetry_boilerplate import get_telemetry_boilerplate
 
 
 # ── Dataclasses ───────────────────────────────────────────────────────────────
@@ -593,6 +594,18 @@ def generate_repo(
     # Merge boilerplate config files with LLM-generated creative files
     boilerplate = get_boilerplate(spec.ecosystem)
     all_files = {**boilerplate, **accumulated}  # LLM files override boilerplate if collision
+
+    # Inject telemetry infrastructure (overrides vite.config.ts to add reporter)
+    if config.TELEMETRY_ENABLED:
+        telemetry_files = get_telemetry_boilerplate(
+            spec.ecosystem,
+            remote_endpoint=config.TELEMETRY_ENDPOINT,
+        )
+        # Append .telemetry/ to the existing .gitignore rather than replacing it
+        if ".gitignore" in all_files:
+            all_files[".gitignore"] = all_files[".gitignore"].rstrip() + "\n\n# Telemetry data (local only)\n.telemetry/\n"
+        telemetry_files.pop(".gitignore", None)
+        all_files.update(telemetry_files)
 
     return ChallengeRepo(
         name=spec.name,
