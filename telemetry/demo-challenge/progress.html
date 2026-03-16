@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stack Challenge — Progress</title>
+  <style>
+    :root {
+      --bg:       #0f1117;
+      --surface:  #1a1d27;
+      --border:   #2a2d3a;
+      --accent:   #6c63ff;
+      --green:    #22c55e;
+      --red:      #ef4444;
+      --yellow:   #f59e0b;
+      --text:     #e2e8f0;
+      --muted:    #64748b;
+      --radius:   10px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 14px;
+      min-height: 100vh;
+      padding: 32px 24px;
+    }
+
+    /* ── Layout ── */
+    .page { max-width: 860px; margin: 0 auto; }
+
+    /* ── Header ── */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 28px;
+    }
+    .header-left h1 {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+    }
+    .header-left .subtitle {
+      color: var(--muted);
+      margin-top: 4px;
+      font-size: 13px;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+    }
+    .badge.in-progress  { background: rgba(245,158,11,0.15); color: var(--yellow); }
+    .badge.complete     { background: rgba(34,197,94,0.15);  color: var(--green);  }
+    .badge.not-started  { background: rgba(100,116,139,0.15);color: var(--muted);  }
+
+    /* ── Stats row ── */
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .stat {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+    }
+    .stat-label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; }
+    .stat-value { font-size: 28px; font-weight: 700; line-height: 1; }
+    .stat-value.green  { color: var(--green); }
+    .stat-value.red    { color: var(--red);   }
+    .stat-value.accent { color: var(--accent);}
+
+    /* ── Progress bar ── */
+    .progress-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      margin-bottom: 20px;
+    }
+    .progress-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .progress-header span { color: var(--muted); font-size: 12px; }
+    .progress-track {
+      height: 10px;
+      background: var(--border);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--green));
+      border-radius: 99px;
+      transition: width 0.6s ease;
+    }
+
+    /* ── Two-column grid ── */
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+
+    /* ── Card ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+    }
+    .card h2 {
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
+
+    /* ── Test list ── */
+    .test-list { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+    .test-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 6px;
+      background: rgba(255,255,255,0.03);
+    }
+    .test-item.passed { border-left: 3px solid var(--green); }
+    .test-item.failed { border-left: 3px solid var(--red);   }
+    .test-icon { font-size: 13px; margin-top: 1px; flex-shrink: 0; }
+    .test-name { font-size: 13px; line-height: 1.4; }
+    .test-error {
+      font-size: 11px;
+      color: var(--red);
+      margin-top: 3px;
+      font-family: "SF Mono", "Fira Code", monospace;
+      opacity: 0.85;
+    }
+
+    /* ── Timeline ── */
+    .timeline { display: flex; flex-direction: column; gap: 10px; }
+    .run-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .run-dot {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .run-dot.all-pass { background: rgba(34,197,94,0.2);  color: var(--green); }
+    .run-dot.partial  { background: rgba(108,99,255,0.2); color: var(--accent);}
+    .run-dot.no-pass  { background: rgba(239,68,68,0.15); color: var(--red);   }
+    .run-meta { flex: 1; }
+    .run-score { font-weight: 600; font-size: 14px; }
+    .run-time  { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .run-bar-track { flex: 1; height: 6px; background: var(--border); border-radius: 99px; overflow: hidden; }
+    .run-bar-fill  { height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--accent), var(--green)); }
+
+    /* ── Load overlay ── */
+    .load-overlay {
+      position: fixed; inset: 0;
+      background: var(--bg);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 16px;
+      z-index: 100;
+    }
+    .load-overlay h2 { font-size: 18px; }
+    .load-overlay p  { color: var(--muted); font-size: 13px; text-align: center; max-width: 360px; line-height: 1.6; }
+    .btn {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      padding: 10px 24px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn.secondary {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 12px;
+      padding: 7px 16px;
+    }
+
+    /* ── Last updated chip ── */
+    .updated-chip {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 6px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .dot-live {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.3; }
+    }
+
+    /* ── Empty state ── */
+    .empty { color: var(--muted); font-size: 13px; padding: 12px 0; }
+
+    /* ── Responsive ── */
+    @media (max-width: 600px) {
+      .stats { grid-template-columns: repeat(2, 1fr); }
+      .grid  { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Load overlay shown when running from file:// protocol -->
+<div class="load-overlay" id="overlay">
+  <h2>📊 Challenge Progress</h2>
+  <p>
+    For automatic loading, serve from a local server:<br>
+    <code style="color:var(--accent)">python3 -m http.server 3000</code><br>
+    then open <code style="color:var(--accent)">http://localhost:3000/progress.html</code>
+  </p>
+  <p style="margin-top:-4px">— or —</p>
+  <button class="btn" id="pickFileBtn">Load .telemetry/test-runs.jsonl</button>
+  <button class="btn secondary" id="loadDemoBtn">Preview with demo data</button>
+</div>
+
+<!-- Dashboard (hidden until data loads) -->
+<div class="page" id="dashboard" style="display:none">
+
+  <div class="header">
+    <div class="header-left">
+      <h1 id="challengeTitle">Stack Challenge</h1>
+      <div class="subtitle" id="studentLabel">Loading…</div>
+      <div class="updated-chip">
+        <span class="dot-live"></span>
+        <span id="updatedLabel">–</span>
+      </div>
+    </div>
+    <span class="badge" id="statusBadge">–</span>
+  </div>
+
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-label">Tests Passing</div>
+      <div class="stat-value green" id="statPassing">–</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Total Tests</div>
+      <div class="stat-value" id="statTotal">–</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Attempts</div>
+      <div class="stat-value accent" id="statAttempts">–</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Time Active</div>
+      <div class="stat-value" id="statTime">–</div>
+    </div>
+  </div>
+
+  <div class="progress-card">
+    <div class="progress-header">
+      <strong id="progressLabel">0 / 0 tests passing</strong>
+      <span id="progressPct">0%</span>
+    </div>
+    <div class="progress-track">
+      <div class="progress-fill" id="progressFill" style="width:0%"></div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <!-- Test status -->
+    <div class="card">
+      <h2>Test Status</h2>
+      <ul class="test-list" id="testList">
+        <li class="empty">No test data yet.</li>
+      </ul>
+    </div>
+
+    <!-- Attempt timeline -->
+    <div class="card">
+      <h2>Attempt History</h2>
+      <div class="timeline" id="timeline">
+        <div class="empty">No runs yet.</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // ── Data parsing ──────────────────────────────────────────────────────────
+
+  function parseJsonl(text) {
+    return text.trim().split("\n")
+      .filter(l => l.trim())
+      .map(l => {
+        try { return JSON.parse(l); } catch { return null; }
+      })
+      .filter(Boolean)
+      .filter(e => e.type === "test_run");
+  }
+
+  // ── Rendering ─────────────────────────────────────────────────────────────
+
+  function timeAgo(isoStr) {
+    const diff = Math.floor((Date.now() - new Date(isoStr)) / 1000);
+    if (diff < 60)   return `${diff}s ago`;
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    return `${Math.floor(diff / 3600)}h ago`;
+  }
+
+  function activeTime(runs) {
+    if (runs.length < 2) return "< 1 min";
+    const first = new Date(runs[0].timestamp);
+    const last  = new Date(runs[runs.length - 1].timestamp);
+    const mins  = Math.round((last - first) / 60000);
+    if (mins < 1)   return "< 1 min";
+    if (mins < 60)  return `${mins} min`;
+    return `${Math.floor(mins / 60)}h ${mins % 60}m`;
+  }
+
+  function render(runs) {
+    if (!runs.length) return;
+
+    const latest   = runs[runs.length - 1];
+    const passed   = latest.summary.passed;
+    const total    = latest.summary.total;
+    const pct      = total > 0 ? Math.round((passed / total) * 100) : 0;
+    const complete = passed === total && total > 0;
+    const student  = latest.studentId || "student";
+    const challenge= latest.challenge || "Challenge";
+
+    // Header
+    document.getElementById("challengeTitle").textContent = `${challenge} Challenge`;
+    document.getElementById("studentLabel").textContent   = `Student: ${student}  ·  Cohort: ${latest.cohortId || "—"}`;
+    document.getElementById("updatedLabel").textContent   = `Updated ${timeAgo(latest.timestamp)}`;
+
+    // Status badge
+    const badge = document.getElementById("statusBadge");
+    if (complete) {
+      badge.textContent = "✓ Complete";
+      badge.className   = "badge complete";
+    } else if (passed > 0) {
+      badge.textContent = "In Progress";
+      badge.className   = "badge in-progress";
+    } else {
+      badge.textContent = "Not Started";
+      badge.className   = "badge not-started";
+    }
+
+    // Stats
+    document.getElementById("statPassing").textContent  = passed;
+    document.getElementById("statTotal").textContent    = total;
+    document.getElementById("statAttempts").textContent = runs.length;
+    document.getElementById("statTime").textContent     = activeTime(runs);
+
+    // Progress bar
+    document.getElementById("progressLabel").textContent = `${passed} / ${total} tests passing`;
+    document.getElementById("progressPct").textContent   = `${pct}%`;
+    document.getElementById("progressFill").style.width  = `${pct}%`;
+
+    // Test list (latest run)
+    const testList = document.getElementById("testList");
+    testList.innerHTML = "";
+    for (const r of latest.results) {
+      const li = document.createElement("li");
+      li.className = `test-item ${r.status}`;
+      const icon = r.status === "passed" ? "✓" : r.status === "skipped" ? "–" : "✗";
+      li.innerHTML = `
+        <span class="test-icon" style="color:${r.status==="passed"?"var(--green)":"var(--red)"}">${icon}</span>
+        <div>
+          <div class="test-name">${r.name}</div>
+          ${r.error ? `<div class="test-error">${r.error}</div>` : ""}
+        </div>`;
+      testList.appendChild(li);
+    }
+
+    // Timeline (all runs, oldest first)
+    const timeline = document.getElementById("timeline");
+    timeline.innerHTML = "";
+    runs.forEach((run, i) => {
+      const p    = run.summary.passed;
+      const t    = run.summary.total;
+      const pct2 = t > 0 ? Math.round((p / t) * 100) : 0;
+      const cls  = p === t && t > 0 ? "all-pass" : p > 0 ? "partial" : "no-pass";
+
+      const div = document.createElement("div");
+      div.className = "run-item";
+      div.innerHTML = `
+        <div class="run-dot ${cls}">${i + 1}</div>
+        <div class="run-meta">
+          <div class="run-score">${p}/${t} passing</div>
+          <div class="run-time">${timeAgo(run.timestamp)}</div>
+        </div>
+        <div class="run-bar-track" style="width:120px">
+          <div class="run-bar-fill" style="width:${pct2}%"></div>
+        </div>`;
+      timeline.appendChild(div);
+    });
+
+    document.getElementById("overlay").style.display    = "none";
+    document.getElementById("dashboard").style.display  = "block";
+  }
+
+  // ── Load strategies ───────────────────────────────────────────────────────
+
+  // 1. Try fetch (works when served via http.server)
+  async function tryFetch() {
+    try {
+      const res = await fetch(".telemetry/test-runs.jsonl", { cache: "no-store" });
+      if (!res.ok) return false;
+      const text = await res.text();
+      render(parseJsonl(text));
+      // Auto-refresh every 5 seconds
+      setInterval(async () => {
+        try {
+          const r = await fetch(".telemetry/test-runs.jsonl", { cache: "no-store" });
+          if (r.ok) render(parseJsonl(await r.text()));
+        } catch {}
+      }, 5000);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // 2. File System Access API (file:// protocol fallback)
+  document.getElementById("pickFileBtn").addEventListener("click", async () => {
+    try {
+      const [handle] = await window.showOpenFilePicker({
+        types: [{ description: "JSONL files", accept: { "text/plain": [".jsonl"] } }],
+        multiple: false,
+      });
+      const file = await handle.getFile();
+      render(parseJsonl(await file.text()));
+    } catch (e) {
+      if (e.name !== "AbortError") alert("Could not read file: " + e.message);
+    }
+  });
+
+  // 3. Demo data (for previewing the dashboard without any telemetry)
+  document.getElementById("loadDemoBtn").addEventListener("click", () => {
+    const now   = Date.now();
+    const demo  = [
+      { type:"test_run", timestamp: new Date(now - 80*60000).toISOString(), sessionId:"s1", studentId:"demo-student", cohortId:"demo-cohort", challenge:"Stack",
+        testFile:"tests/Stack.test.ts",
+        results:[
+          {name:"should create an empty stack",              status:"passed", duration:1},
+          {name:"should report size as 0 when empty",        status:"passed", duration:0},
+          {name:"should report isEmpty as true when empty",  status:"passed", duration:0},
+          {name:"should push items and increase size",       status:"failed", duration:4, error:"expected +0 to be 2"},
+          {name:"should pop items in LIFO order",            status:"failed", duration:0},
+          {name:"should peek at the top item",               status:"failed", duration:0},
+          {name:"should return undefined when popping empty",status:"failed", duration:0},
+          {name:"should return undefined when peeking empty",status:"failed", duration:0},
+          {name:"should report isEmpty after push and pop",  status:"failed", duration:0},
+        ], summary:{total:9,passed:3,failed:6,duration:5} },
+      { type:"test_run", timestamp: new Date(now - 55*60000).toISOString(), sessionId:"s2", studentId:"demo-student", cohortId:"demo-cohort", challenge:"Stack",
+        testFile:"tests/Stack.test.ts",
+        results:[
+          {name:"should create an empty stack",              status:"passed", duration:1},
+          {name:"should report size as 0 when empty",        status:"passed", duration:0},
+          {name:"should report isEmpty as true when empty",  status:"passed", duration:0},
+          {name:"should push items and increase size",       status:"passed", duration:2},
+          {name:"should pop items in LIFO order",            status:"passed", duration:1},
+          {name:"should peek at the top item",               status:"passed", duration:1},
+          {name:"should return undefined when popping empty",status:"failed", duration:3, error:"expected null to be undefined"},
+          {name:"should return undefined when peeking empty",status:"failed", duration:0},
+          {name:"should report isEmpty after push and pop",  status:"failed", duration:0},
+        ], summary:{total:9,passed:6,failed:3,duration:8} },
+      { type:"test_run", timestamp: new Date(now - 18*60000).toISOString(), sessionId:"s3", studentId:"demo-student", cohortId:"demo-cohort", challenge:"Stack",
+        testFile:"tests/Stack.test.ts",
+        results:[
+          {name:"should create an empty stack",              status:"passed", duration:1},
+          {name:"should report size as 0 when empty",        status:"passed", duration:0},
+          {name:"should report isEmpty as true when empty",  status:"passed", duration:0},
+          {name:"should push items and increase size",       status:"passed", duration:2},
+          {name:"should pop items in LIFO order",            status:"passed", duration:1},
+          {name:"should peek at the top item",               status:"passed", duration:1},
+          {name:"should return undefined when popping empty",status:"passed", duration:1},
+          {name:"should return undefined when peeking empty",status:"passed", duration:1},
+          {name:"should report isEmpty after push and pop",  status:"passed", duration:1},
+        ], summary:{total:9,passed:9,failed:0,duration:8} },
+    ];
+    render(demo);
+  });
+
+  // Auto-try fetch on load
+  window.addEventListener("DOMContentLoaded", () => tryFetch());
+</script>
+</body>
+</html>

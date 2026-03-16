@@ -1,0 +1,5 @@
+node_modules/
+dist/
+
+# Telemetry data stays local
+.telemetry/

@@ -1,0 +1,10 @@
+{
+  "enabled": true,
+  "studentId": "demo-student",
+  "cohortId": "demo-cohort",
+  "remoteEndpoint": "http://localhost:8000/events",
+  "trackTestRuns": true,
+  "trackGitCommits": true,
+  "trackAIInteractions": true,
+  "trackAssessments": true
+}
