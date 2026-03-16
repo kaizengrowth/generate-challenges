@@ -21,6 +21,7 @@ Select the template that matches the detected language/framework. When a templat
 ```
 
 Add `tsx` and a `start` script only if the README mentions running a file directly:
+
 ```json
 {
   "type": "module",
@@ -57,8 +58,11 @@ Add `tsx` and a `start` script only if the README mentions running a file direct
 
 ```
 npm install
-npm test      # stops at first failure (--bail 1); fix one test at a time
+npm test                                    # run all challenges; stops at first failure
+npm test challengeName       # run one challenge only
 ```
+
+Replace `challengeName` with the actual test file name for that challenge.
 
 ---
 
@@ -120,8 +124,8 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     globals: true,
-    setupFiles: "./src/setupTests.ts",
-  },
+    setupFiles: "./src/setupTests.ts"
+  }
 });
 ```
 
@@ -131,13 +135,114 @@ export default defineConfig({
 import "@testing-library/jest-dom";
 ```
 
+### `index.html`
+
+Required for `npm run dev` to work. Vite uses this as the entry point.
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Challenge</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+```
+
+### `src/main.tsx`
+
+Required for `npm run dev` to work. Mounts the App component into the DOM.
+
+```tsx
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import App from "./App";
+
+createRoot(document.getElementById("root")!).render(
+  <StrictMode>
+    <App />
+  </StrictMode>
+);
+```
+
+### `src/App.css`
+
+Always generate this alongside App.tsx. All layout styles go here — no inline styles in the JSX.
+
+```css
+.app-layout {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem;
+}
+
+.app-header {
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.app-header p {
+  color: var(--color-muted);
+  margin-top: 0.3rem;
+}
+
+.challenge-section {
+  margin-bottom: 1.5rem;
+}
+
+.challenge-section h2 {
+  margin-bottom: 1rem;
+}
+```
+
+### `src/App.tsx`
+
+Import every challenge component and render each one in its own labeled section.
+Replace `ComponentName` with the actual exported name(s) from each skeleton file.
+Styles come from `App.css` — no inline styles on JSX elements.
+
+```tsx
+import { ComponentName } from "./ComponentName";
+// import { OtherComponent } from "./OtherComponent";
+import "./App.css";
+
+function App() {
+  return (
+    <div className="app-layout">
+      <header className="app-header">
+        <h1>Challenge Title</h1>
+        <p>Short description of the challenge set</p>
+      </header>
+
+      <section className="card challenge-section">
+        <h2>Component Name</h2>
+        <ComponentName />
+      </section>
+
+      {/* Add one <section className="card challenge-section"> per challenge component */}
+    </div>
+  );
+}
+
+export default App;
+```
+
 ### Running
 
 ```
 npm install
-npm test        # stops at first failure (--bail 1); fix one test at a time
-npm run dev     # open in browser for visual testing
+npm test                                         # run all challenges; stops at first failure
+npm test challengeName           # run one challenge only
+npm run dev                                      # open in browser for visual testing
 ```
+
+Replace `challengeName` with the actual test file name for that challenge.
 
 ---
 
@@ -213,23 +318,145 @@ module.exports = function (config) {
       require("karma-chrome-launcher"),
       require("karma-jasmine-html-reporter"),
       require("karma-coverage"),
-      require("@angular-devkit/build-angular/plugins/karma"),
+      require("@angular-devkit/build-angular/plugins/karma")
     ],
     reporters: ["progress"],
     browsers: ["ChromeHeadless"],
     singleRun: true,
-    bail: true,   // stop after the first test failure
+    bail: true // stop after the first test failure
   });
 };
+```
+
+### `src/index.html`
+
+Required for `ng serve` to work. Angular's build tool uses this as the entry point.
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Challenge</title>
+  </head>
+  <body>
+    <app-root></app-root>
+  </body>
+</html>
+```
+
+### `src/main.ts`
+
+Required for `ng serve` to work. Bootstraps the root AppModule.
+
+```typescript
+import { platformBrowserDynamic } from "@angular/platform-browser-dynamic";
+import { AppModule } from "./app/app.module";
+
+platformBrowserDynamic().bootstrapModule(AppModule).catch(console.error);
+```
+
+### `src/app/app.module.ts`
+
+Declare all challenge components here so they are available in the browser.
+
+```typescript
+import { NgModule } from "@angular/core";
+import { BrowserModule } from "@angular/platform-browser";
+import { AppComponent } from "./app.component";
+import { ChallengeComponent } from "./challenge/challenge.component";
+// import additional challenge components as needed
+
+@NgModule({
+  declarations: [AppComponent, ChallengeComponent],
+  imports: [BrowserModule],
+  bootstrap: [AppComponent]
+})
+export class AppModule {}
+```
+
+### `src/app/app.component.ts`
+
+Renders all challenge components using class names only — no inline styles. Layout styles are added to `src/styles.css`.
+
+```typescript
+import { Component } from "@angular/core";
+
+@Component({
+  selector: "app-root",
+  template: `
+    <div class="app-layout">
+      <header class="app-header">
+        <h1>Challenge Title</h1>
+        <p>Short description of the challenge set</p>
+      </header>
+      <section class="card challenge-section">
+        <h2>Challenge Component</h2>
+        <app-challenge></app-challenge>
+      </section>
+      <!-- Add one <section class="card challenge-section"> per challenge component -->
+    </div>
+  `
+})
+export class AppComponent {}
+```
+
+### `angular.json`
+
+Minimal Angular workspace config required for `ng serve` and `ng test`.
+
+```json
+{
+  "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
+  "version": 1,
+  "newProjectRoot": "projects",
+  "projects": {
+    "challenge": {
+      "projectType": "application",
+      "root": "",
+      "sourceRoot": "src",
+      "architect": {
+        "build": {
+          "builder": "@angular-devkit/build-angular:browser",
+          "options": {
+            "outputPath": "dist",
+            "index": "src/index.html",
+            "main": "src/main.ts",
+            "tsConfig": "tsconfig.json",
+            "assets": [],
+            "styles": [],
+            "scripts": []
+          }
+        },
+        "serve": {
+          "builder": "@angular-devkit/build-angular:dev-server",
+          "options": { "buildTarget": "challenge:build" }
+        },
+        "test": {
+          "builder": "@angular-devkit/build-angular:karma",
+          "options": {
+            "main": "src/main.ts",
+            "tsConfig": "tsconfig.json",
+            "karmaConfig": "karma.conf.js"
+          }
+        }
+      }
+    }
+  }
+}
 ```
 
 ### Running
 
 ```
 npm install
-npm test        # stops at first failure (bail: true); fix one test at a time
-ng serve        # open in browser for visual testing
+npm test                                                             # run all challenges; stops at first failure
+ng test --include="src/app/challenge-name/challenge-name.spec.ts"   # run one challenge only
+ng serve                                                             # open in browser for visual testing (http://localhost:4200)
 ```
+
+Replace the `--include` path with the actual spec file path for that challenge.
 
 ---
 
@@ -256,9 +483,11 @@ tests/
 
 ```
 pip install -r requirements.txt
-pytest -x       # stops at first failure (-x); fix one test at a time
-pytest -x -v    # same but verbose — shows each test name with pass/fail
+pytest -x                                   # run all challenges; stops at first failure
+pytest tests/test_challenge_name.py -v      # run one challenge only
 ```
+
+Replace `tests/test_challenge_name.py` with the actual test file path for that challenge.
 
 ---
 
@@ -402,9 +631,11 @@ com.challenge.support.ChallengeTestListener
 ### Running
 
 ```
-mvn test                        # all challenges; stops after first failing challenge
-mvn test -Dtest=ClassNameTest   # single challenge by test class name
+mvn test                          # run all challenges; stops after first failing challenge
+mvn test -Dtest=ClassNameTest     # run one challenge only
 ```
+
+Replace `ClassNameTest` with the actual test class name for that challenge (e.g. `StackTest`).
 
 ---
 
@@ -454,10 +685,11 @@ CMakeLists.txt
 ```
 cmake -S . -B build
 cmake --build build
-cd build && ctest --stop-on-failure --output-on-failure
+cd build && ctest --stop-on-failure --output-on-failure           # run all challenges
+cd build && ctest -R ClassNameTest --output-on-failure            # run one challenge only
 ```
 
-`--stop-on-failure` (CMake 3.16+) stops after the first failing test.
+Replace `ClassNameTest` with the actual test target name for that challenge. `--stop-on-failure` requires CMake 3.16+.
 
 ---
 
@@ -495,18 +727,103 @@ export default defineConfig({
   plugins: [vue()],
   test: {
     environment: "jsdom",
-    globals: true,
-  },
+    globals: true
+  }
 });
+```
+
+### `index.html`
+
+Required for `npm run dev` to work. Vite uses this as the entry point.
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Challenge</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
+```
+
+### `src/main.ts`
+
+Required for `npm run dev` to work. Mounts the App component into the DOM.
+
+```typescript
+import { createApp } from "vue";
+import App from "./App.vue";
+
+createApp(App).mount("#app");
+```
+
+### `src/App.vue`
+
+Import every challenge component and render each one in its own labeled section.
+Replace `ComponentName` with the actual component name(s) from each skeleton file.
+Layout styles go in the `<style>` block — no inline styles on elements.
+
+```vue
+<script setup lang="ts">
+import ComponentName from "./ComponentName.vue";
+// import OtherComponent from "./OtherComponent.vue";
+</script>
+
+<template>
+  <div class="app-layout">
+    <header class="app-header">
+      <h1>Challenge Title</h1>
+      <p>Short description of the challenge set</p>
+    </header>
+
+    <section class="card challenge-section">
+      <h2>Component Name</h2>
+      <ComponentName />
+    </section>
+
+    <!-- Add one <section class="card challenge-section"> per challenge component -->
+  </div>
+</template>
+
+<style>
+.app-layout {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem;
+}
+.app-header {
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--color-border);
+}
+.app-header p {
+  color: var(--color-muted);
+  margin-top: 0.3rem;
+}
+.challenge-section {
+  margin-bottom: 1.5rem;
+}
+.challenge-section h2 {
+  margin-bottom: 1rem;
+}
+</style>
 ```
 
 ### Running
 
 ```
 npm install
-npm test        # stops at first failure (--bail 1); fix one test at a time
-npm run dev     # open in browser for visual testing
+npm test                                       # run all challenges; stops at first failure
+npm test -- src/ComponentName.test.ts          # run one challenge only
+npm run dev                                    # open in browser for visual testing
 ```
+
+Replace `src/ComponentName.test.ts` with the actual test file path for that challenge.
 
 ---
 
@@ -624,12 +941,12 @@ echo ""
 
 ### Key behaviours to know when writing test patterns
 
-| Situation | What to expect | Pattern approach |
-|---|---|---|
-| Numeric variable `PIC 9(5)` displaying 8 | Output: `00008` | Pattern `8` — substring match works |
-| String variable `PIC X(20)` storing "ALICE" | Output: `ALICE               ` (space-padded) | Pattern `ALICE` — substring match works |
-| Single letter grade "C" | "C" appears in words like "SCORE" | Use `\bC\b` for word-boundary match |
-| Test input appears in output | e.g., input `1000` → output may echo `001000` | Pick test inputs whose expected result does NOT appear as a substring of the inputs |
+| Situation                                   | What to expect                                | Pattern approach                                                                    |
+| ------------------------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Numeric variable `PIC 9(5)` displaying 8    | Output: `00008`                               | Pattern `8` — substring match works                                                 |
+| String variable `PIC X(20)` storing "ALICE" | Output: `ALICE               ` (space-padded) | Pattern `ALICE` — substring match works                                             |
+| Single letter grade "C"                     | "C" appears in words like "SCORE"             | Use `\bC\b` for word-boundary match                                                 |
+| Test input appears in output                | e.g., input `1000` → output may echo `001000` | Pick test inputs whose expected result does NOT appear as a substring of the inputs |
 
 ### Running
 

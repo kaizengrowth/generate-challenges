@@ -1,0 +1,17 @@
+# Environment
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+
+# Output
+output/
+
+# Knowledge base (generated at runtime)
+knowledge_base/challenge_types/
+
+# OS
+.DS_Store
