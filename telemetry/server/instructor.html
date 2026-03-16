@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Instructor Dashboard — Challenge Telemetry</title>
+  <style>
+    :root {
+      --bg:        #0f1117;
+      --surface:   #1a1d27;
+      --surface2:  #20243200;
+      --border:    #2a2d3a;
+      --accent:    #6c63ff;
+      --green:     #22c55e;
+      --red:       #ef4444;
+      --yellow:    #f59e0b;
+      --blue:      #3b82f6;
+      --text:      #e2e8f0;
+      --muted:     #64748b;
+      --radius:    10px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 14px;
+      min-height: 100vh;
+    }
+
+    /* ── Shell ── */
+    .shell { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: 24px 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .sidebar-logo {
+      padding: 0 20px 24px;
+      border-bottom: 1px solid var(--border);
+    }
+    .sidebar-logo h1 { font-size: 15px; font-weight: 700; }
+    .sidebar-logo p  { font-size: 11px; color: var(--muted); margin-top: 3px; }
+
+    .sidebar-section { padding: 16px 20px 8px; }
+    .sidebar-section-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 10px; }
+
+    .cohort-pill {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 10px; border-radius: 7px;
+      cursor: pointer; font-size: 13px;
+      border: 1px solid transparent;
+      transition: all 0.15s;
+    }
+    .cohort-pill.active {
+      background: rgba(108,99,255,0.12);
+      border-color: rgba(108,99,255,0.3);
+      color: #a5a0ff;
+    }
+    .cohort-pill:hover:not(.active) { background: rgba(255,255,255,0.04); }
+    .cohort-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--green); flex-shrink: 0;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+    .sidebar-stats { padding: 16px 20px; margin-top: auto; border-top: 1px solid var(--border); }
+    .sidebar-stat { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); padding: 3px 0; }
+    .sidebar-stat span:last-child { color: var(--text); font-weight: 600; }
+
+    /* ── Main ── */
+    .main { padding: 28px 32px; overflow-y: auto; }
+
+    .topbar {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 24px;
+    }
+    .topbar h2 { font-size: 18px; font-weight: 700; }
+    .topbar-meta { display: flex; align-items: center; gap: 12px; }
+    .live-chip {
+      display: flex; align-items: center; gap: 5px;
+      font-size: 11px; color: var(--green);
+      background: rgba(34,197,94,0.1);
+      padding: 4px 10px; border-radius: 20px;
+    }
+    .live-dot { width:6px; height:6px; border-radius:50%; background:var(--green); animation:pulse 1.5s infinite; }
+    .refresh-btn {
+      background: transparent; border: 1px solid var(--border);
+      color: var(--muted); padding: 6px 14px; border-radius: 7px;
+      font-size: 12px; cursor: pointer; transition: all 0.15s;
+    }
+    .refresh-btn:hover { border-color: var(--accent); color: var(--text); }
+
+    /* ── Stat cards ── */
+    .stats-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 24px; }
+    .stat-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 18px 20px;
+    }
+    .stat-card-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); margin-bottom: 8px; }
+    .stat-card-value { font-size: 30px; font-weight: 700; line-height: 1; }
+    .stat-card-sub   { font-size: 11px; color: var(--muted); margin-top: 6px; }
+    .green  { color: var(--green);  }
+    .red    { color: var(--red);    }
+    .accent { color: var(--accent); }
+    .yellow { color: var(--yellow); }
+
+    /* ── Two-col layout ── */
+    .row { display: grid; grid-template-columns: 1fr 320px; gap: 16px; margin-bottom: 16px; }
+
+    /* ── Card ── */
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 20px 24px;
+    }
+    .card-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 18px;
+    }
+    .card-title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); }
+
+    /* ── Student grid ── */
+    .student-grid { display: flex; flex-direction: column; gap: 10px; }
+    .student-row {
+      display: grid; grid-template-columns: 36px 140px 1fr 80px 60px;
+      align-items: center; gap: 12px;
+      padding: 10px 12px; border-radius: 8px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid transparent;
+      transition: border-color 0.15s;
+    }
+    .student-row:hover { border-color: var(--border); }
+    .student-avatar {
+      width: 32px; height: 32px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700;
+      flex-shrink: 0;
+    }
+    .student-name { font-weight: 600; font-size: 13px; }
+    .student-challenge { font-size: 11px; color: var(--muted); margin-top: 1px; }
+
+    .mini-bar-track { height: 6px; background: var(--border); border-radius: 99px; overflow: hidden; }
+    .mini-bar-fill  { height: 100%; border-radius: 99px; transition: width 0.4s ease; }
+
+    .student-score { font-size: 13px; font-weight: 600; text-align: right; }
+    .student-runs  { font-size: 11px; color: var(--muted); text-align: right; }
+
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%; display: inline-block;
+    }
+    .status-dot.complete    { background: var(--green);  }
+    .status-dot.in-progress { background: var(--yellow); }
+    .status-dot.stuck       { background: var(--red);    }
+    .status-dot.starting    { background: var(--muted);  }
+
+    /* ── Live feed ── */
+    .feed { display: flex; flex-direction: column; gap: 8px; max-height: 420px; overflow-y: auto; }
+    .feed-item {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 9px 10px; border-radius: 7px;
+      background: rgba(255,255,255,0.02);
+      animation: fadeIn 0.3s ease;
+    }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:translateY(0); } }
+    .feed-icon { font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+    .feed-text { font-size: 12px; line-height: 1.5; }
+    .feed-text strong { color: var(--text); }
+    .feed-text .feed-score { font-weight: 600; }
+    .feed-time { font-size: 10px; color: var(--muted); margin-top: 2px; }
+    .feed-empty { color: var(--muted); font-size: 12px; padding: 12px 0; }
+
+    /* ── Heatmap ── */
+    .heatmap { display: flex; flex-direction: column; gap: 10px; }
+    .heat-row { display: grid; grid-template-columns: 100px 1fr 50px 60px; align-items: center; gap: 10px; }
+    .heat-label { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .heat-bar-track { height: 8px; background: var(--border); border-radius: 99px; overflow: hidden; }
+    .heat-bar-fill  { height: 100%; border-radius: 99px; transition: width 0.5s ease; }
+    .heat-pct  { font-size: 12px; font-weight: 600; text-align: right; }
+    .heat-label-sub { font-size: 10px; color: var(--muted); }
+
+    /* ── Connecting overlay ── */
+    #connectingOverlay {
+      position: fixed; inset: 0; background: rgba(15,17,23,0.92);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 14px; z-index: 50;
+    }
+    #connectingOverlay h2  { font-size: 17px; }
+    #connectingOverlay p   { color: var(--muted); font-size: 13px; text-align: center; max-width: 340px; line-height: 1.6; }
+    .spinner {
+      width: 32px; height: 32px; border: 3px solid var(--border);
+      border-top-color: var(--accent); border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .btn {
+      background: var(--accent); color: #fff; border: none;
+      padding: 10px 24px; border-radius: 8px;
+      font-size: 13px; font-weight: 600; cursor: pointer;
+    }
+    .btn.secondary {
+      background: transparent; border: 1px solid var(--border); color: var(--muted);
+    }
+    .btn:hover { opacity: 0.85; }
+
+    code { font-family: "SF Mono","Fira Code",monospace; color: var(--accent); font-size: 12px; }
+
+    /* ── Column header row ── */
+    .student-header {
+      display: grid; grid-template-columns: 36px 140px 1fr 80px 60px;
+      gap: 12px; padding: 0 12px 8px;
+      font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+
+<!-- Connecting overlay -->
+<div id="connectingOverlay">
+  <div class="spinner" id="spinner"></div>
+  <h2>Connecting to telemetry server…</h2>
+  <p>Make sure the server is running:<br>
+    <code>cd telemetry/server && .venv/bin/uvicorn main:app --port 8000</code>
+  </p>
+  <button class="btn secondary" id="loadDemoBtn">Preview with demo data</button>
+</div>
+
+<!-- Dashboard -->
+<div class="shell" id="dashboard" style="display:none">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <h1>Challenge Telemetry</h1>
+      <p>Instructor Dashboard</p>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Active Cohorts</div>
+      <div class="cohort-pill active" id="cohortPill">
+        <span class="cohort-dot"></span>
+        <span id="cohortPillLabel">demo-cohort</span>
+      </div>
+    </div>
+
+    <div class="sidebar-stats" id="sidebarStats">
+      <div class="sidebar-stat"><span>Students</span><span id="sbStudents">–</span></div>
+      <div class="sidebar-stat"><span>Completed</span><span id="sbCompleted">–</span></div>
+      <div class="sidebar-stat"><span>In Progress</span><span id="sbInProgress">–</span></div>
+      <div class="sidebar-stat"><span>Not Started</span><span id="sbNotStarted">–</span></div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+    <div class="topbar">
+      <div>
+        <h2 id="mainTitle">demo-cohort</h2>
+        <div style="font-size:12px;color:var(--muted);margin-top:3px" id="lastFetched">–</div>
+      </div>
+      <div class="topbar-meta">
+        <div class="live-chip"><span class="live-dot"></span>Live</div>
+        <button class="refresh-btn" id="refreshBtn">↺ Refresh</button>
+      </div>
+    </div>
+
+    <!-- Stats row -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-card-label">Students</div>
+        <div class="stat-card-value accent" id="totalStudents">–</div>
+        <div class="stat-card-sub">in cohort</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-label">Completed</div>
+        <div class="stat-card-value green" id="totalCompleted">–</div>
+        <div class="stat-card-sub">all tests passing</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-label">Struggling</div>
+        <div class="stat-card-value red" id="totalStruggling">–</div>
+        <div class="stat-card-sub">no progress in 5+ runs</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-label">Avg Pass Rate</div>
+        <div class="stat-card-value yellow" id="avgPassRate">–</div>
+        <div class="stat-card-sub">across all challenges</div>
+      </div>
+    </div>
+
+    <!-- Students + Live feed -->
+    <div class="row">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Students</span>
+          <span style="font-size:11px;color:var(--muted)" id="studentCountLabel">–</span>
+        </div>
+        <div class="student-header">
+          <span></span>
+          <span>Student</span>
+          <span>Progress</span>
+          <span style="text-align:right">Score</span>
+          <span style="text-align:right">Runs</span>
+        </div>
+        <div class="student-grid" id="studentGrid">
+          <div style="color:var(--muted);font-size:13px">Loading…</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Live Feed</span>
+          <span class="live-chip" style="font-size:10px"><span class="live-dot"></span>SSE</span>
+        </div>
+        <div class="feed" id="liveFeed">
+          <div class="feed-empty">Waiting for events…</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Challenge heatmap -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Challenge Heatmap — where students struggle</span>
+        <span style="font-size:11px;color:var(--muted)">sorted by avg pass rate ↑</span>
+      </div>
+      <div class="heatmap" id="heatmap">
+        <div style="color:var(--muted);font-size:13px">Loading…</div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  const API = "http://localhost:8000";
+  const COHORT = "demo-cohort";
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  function timeAgo(isoStr) {
+    if (!isoStr) return "–";
+    const diff = Math.floor((Date.now() - new Date(isoStr)) / 1000);
+    if (diff < 60)   return `${diff}s ago`;
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    return `${Math.floor(diff / 3600)}h ${Math.floor((diff % 3600) / 60)}m ago`;
+  }
+
+  function avatarColors(name) {
+    const colors = [
+      ["#6c63ff","#1e1a4a"],["#22c55e","#0f2a1a"],["#3b82f6","#0f1e3a"],
+      ["#f59e0b","#2a1e0a"],["#ec4899","#2a0f1e"],["#14b8a6","#0a2020"],
+    ];
+    const i = name.charCodeAt(0) % colors.length;
+    return colors[i];
+  }
+
+  function studentStatus(s) {
+    const p = s.latest_passed, t = s.latest_total;
+    if (p === t && t > 0) return "complete";
+    if (s.total_runs >= 5 && p === s.best_passed && p < t) return "stuck";
+    if (p > 0) return "in-progress";
+    return "starting";
+  }
+
+  function statusLabel(st) {
+    return { complete:"Complete", stuck:"Stuck", "in-progress":"In Progress", starting:"Starting" }[st];
+  }
+
+  function heatColor(pct) {
+    if (pct >= 80) return "var(--green)";
+    if (pct >= 50) return "var(--yellow)";
+    return "var(--red)";
+  }
+
+  function barColor(passed, total) {
+    const pct = total > 0 ? passed / total : 0;
+    if (pct >= 1)   return "var(--green)";
+    if (pct >= 0.5) return "var(--accent)";
+    return "var(--red)";
+  }
+
+  // ── Render cohort ─────────────────────────────────────────────────────────
+
+  function renderCohort(data) {
+    const students = data.students || [];
+    const heatmap  = data.challengeHeatmap || [];
+
+    // Sidebar
+    document.getElementById("cohortPillLabel").textContent = data.cohortId;
+    document.getElementById("mainTitle").textContent       = data.cohortId;
+    document.getElementById("lastFetched").textContent     = `Last updated ${timeAgo(data.generatedAt)}`;
+
+    const completed   = students.filter(s => s.latest_passed === s.latest_total && s.latest_total > 0).length;
+    const struggling  = students.filter(s => studentStatus(s) === "stuck").length;
+    const inProgress  = students.filter(s => studentStatus(s) === "in-progress").length;
+    const notStarted  = students.filter(s => studentStatus(s) === "starting").length;
+
+    document.getElementById("sbStudents").textContent   = students.length;
+    document.getElementById("sbCompleted").textContent  = completed;
+    document.getElementById("sbInProgress").textContent = inProgress;
+    document.getElementById("sbNotStarted").textContent = notStarted;
+
+    document.getElementById("totalStudents").textContent  = students.length;
+    document.getElementById("totalCompleted").textContent = completed;
+    document.getElementById("totalStruggling").textContent = struggling;
+
+    const avgRate = heatmap.length
+      ? Math.round(heatmap.reduce((s,h) => s + (h.avg_pass_rate||0), 0) / heatmap.length)
+      : 0;
+    document.getElementById("avgPassRate").textContent = avgRate + "%";
+
+    // Student count label
+    document.getElementById("studentCountLabel").textContent = `${students.length} enrolled`;
+
+    // Student grid
+    const grid = document.getElementById("studentGrid");
+    grid.innerHTML = "";
+    if (!students.length) {
+      grid.innerHTML = '<div style="color:var(--muted);font-size:13px">No students yet.</div>';
+    } else {
+      for (const s of students) {
+        const p   = s.latest_passed ?? 0;
+        const t   = s.latest_total  ?? 0;
+        const pct = t > 0 ? Math.round((p / t) * 100) : 0;
+        const st  = studentStatus(s);
+        const [fg, bg] = avatarColors(s.student_id);
+        const initial  = s.student_id[0].toUpperCase();
+
+        const row = document.createElement("div");
+        row.className = "student-row";
+        row.innerHTML = `
+          <div class="student-avatar" style="background:${bg};color:${fg}">${initial}</div>
+          <div>
+            <div class="student-name">${s.student_id}</div>
+            <div class="student-challenge">
+              <span class="status-dot ${st}"></span>
+              ${s.latest_challenge || "–"} · ${statusLabel(st)}
+            </div>
+          </div>
+          <div>
+            <div class="mini-bar-track">
+              <div class="mini-bar-fill" style="width:${pct}%;background:${barColor(p,t)}"></div>
+            </div>
+            <div style="font-size:10px;color:var(--muted);margin-top:3px">Active ${timeAgo(s.last_active_at)}</div>
+          </div>
+          <div>
+            <div class="student-score">${p}/${t}</div>
+            <div class="student-runs">${pct}%</div>
+          </div>
+          <div>
+            <div class="student-score">${s.total_runs}</div>
+            <div class="student-runs">runs</div>
+          </div>`;
+        grid.appendChild(row);
+      }
+    }
+
+    // Heatmap
+    const heatEl = document.getElementById("heatmap");
+    heatEl.innerHTML = "";
+    if (!heatmap.length) {
+      heatEl.innerHTML = '<div style="color:var(--muted);font-size:13px">No challenge data yet.</div>';
+    } else {
+      for (const h of heatmap) {
+        const pct  = h.avg_pass_rate ?? 0;
+        const color = heatColor(pct);
+        const row   = document.createElement("div");
+        row.className = "heat-row";
+        row.innerHTML = `
+          <div>
+            <div class="heat-label">${h.challenge}</div>
+            <div class="heat-label-sub">${h.students_attempted} student${h.students_attempted!==1?"s":""}</div>
+          </div>
+          <div class="heat-bar-track">
+            <div class="heat-bar-fill" style="width:${pct}%;background:${color}"></div>
+          </div>
+          <div class="heat-pct" style="color:${color}">${pct}%</div>
+          <div style="font-size:11px;color:var(--muted)">${h.completions} done</div>`;
+        heatEl.appendChild(row);
+      }
+    }
+  }
+
+  // ── Live feed ─────────────────────────────────────────────────────────────
+
+  let feedEmpty = true;
+
+  function addFeedItem(evt, isHistory) {
+    const feed = document.getElementById("liveFeed");
+    if (feedEmpty) { feed.innerHTML = ""; feedEmpty = false; }
+
+    const p = evt.passed ?? 0, t = evt.total ?? 0;
+    const pct = t > 0 ? Math.round((p/t)*100) : 0;
+    const icon  = p === t && t > 0 ? "✅" : p > 0 ? "🟡" : "🔴";
+    const score = `<span class="feed-score" style="color:${pct===100?"var(--green)":pct>0?"var(--yellow)":"var(--red)"}">${p}/${t}</span>`;
+
+    const item = document.createElement("div");
+    item.className = "feed-item";
+    item.style.opacity = isHistory ? "0.55" : "1";
+    item.innerHTML = `
+      <span class="feed-icon">${icon}</span>
+      <div>
+        <div class="feed-text">
+          <strong>${evt.studentId || "student"}</strong> ran tests on
+          <strong>${evt.challenge || "?"}</strong> — ${score} passing
+        </div>
+        <div class="feed-time">${isHistory ? timeAgo(evt.receivedAt || evt.received_at) : "just now"}</div>
+      </div>`;
+
+    feed.insertBefore(item, feed.firstChild);
+
+    // Keep feed to 30 items
+    while (feed.children.length > 30) feed.removeChild(feed.lastChild);
+  }
+
+  // ── SSE connection ────────────────────────────────────────────────────────
+
+  let sseSource = null;
+
+  function connectSSE(cohortId) {
+    if (sseSource) sseSource.close();
+    sseSource = new EventSource(`${API}/stream/${cohortId}`);
+
+    sseSource.onmessage = (e) => {
+      try {
+        const evt = JSON.parse(e.data);
+        if (evt.type === "connected") return;
+        const isHistory = e.lastEventId === "history";
+        addFeedItem(evt, isHistory);
+        // Re-fetch cohort summary on each live event (non-history)
+        if (!isHistory) fetchAndRender(cohortId);
+      } catch {}
+    };
+
+    sseSource.onerror = () => {
+      // SSE will auto-reconnect; no action needed
+    };
+  }
+
+  // ── Data fetch ────────────────────────────────────────────────────────────
+
+  async function fetchAndRender(cohortId) {
+    const res = await fetch(`${API}/cohort/${cohortId}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    renderCohort(await res.json());
+  }
+
+  // ── Boot sequence ─────────────────────────────────────────────────────────
+
+  async function boot() {
+    try {
+      await fetchAndRender(COHORT);
+      connectSSE(COHORT);
+      document.getElementById("connectingOverlay").style.display = "none";
+      document.getElementById("dashboard").style.display = "grid";
+    } catch {
+      // Server not reachable — show overlay and keep trying
+      document.getElementById("spinner").style.display = "none";
+      document.getElementById("connectingOverlay").querySelector("h2").textContent = "Cannot reach server";
+    }
+  }
+
+  document.getElementById("refreshBtn").addEventListener("click", () => fetchAndRender(COHORT));
+
+  // Auto-refresh every 15s as a fallback (SSE handles real-time)
+  setInterval(() => fetchAndRender(COHORT).catch(() => {}), 15000);
+
+  // ── Demo data mode ────────────────────────────────────────────────────────
+
+  document.getElementById("loadDemoBtn").addEventListener("click", () => {
+    const now = Date.now();
+    renderCohort({
+      cohortId: "demo-cohort",
+      studentCount: 4,
+      completedCount: 1,
+      generatedAt: new Date(now).toISOString(),
+      students: [
+        { student_id:"alice",        first_seen_at: new Date(now-90*60000).toISOString(), last_active_at: new Date(now-18*60000).toISOString(), total_runs:7, best_passed:8, latest_total:8, latest_passed:6, latest_challenge:"LinkedList" },
+        { student_id:"bob",          first_seen_at: new Date(now-85*60000).toISOString(), last_active_at: new Date(now-22*60000).toISOString(), total_runs:5, best_passed:5, latest_total:8, latest_passed:5, latest_challenge:"Stack"      },
+        { student_id:"carlos",       first_seen_at: new Date(now-10*60000).toISOString(), last_active_at: new Date(now-10*60000).toISOString(), total_runs:1, best_passed:0, latest_total:8, latest_passed:0, latest_challenge:"Stack"      },
+        { student_id:"demo-student", first_seen_at: new Date(now-30*60000).toISOString(), last_active_at: new Date(now-2*60000).toISOString(),  total_runs:3, best_passed:3, latest_total:9, latest_passed:3, latest_challenge:"Stack"      },
+      ],
+      challengeHeatmap: [
+        { challenge:"Stack",      students_attempted:4, avg_pass_rate:40.5, completions:1 },
+        { challenge:"LinkedList", students_attempted:1, avg_pass_rate:41.7, completions:0 },
+      ],
+    });
+
+    // Replay demo feed
+    const demoEvents = [
+      { studentId:"carlos",       challenge:"Stack",      passed:0, total:8, receivedAt: new Date(now-10*60000).toISOString() },
+      { studentId:"demo-student", challenge:"Stack",      passed:3, total:9, receivedAt: new Date(now-2*60000).toISOString()  },
+      { studentId:"bob",          challenge:"Stack",      passed:5, total:8, receivedAt: new Date(now-22*60000).toISOString() },
+      { studentId:"alice",        challenge:"LinkedList", passed:6, total:8, receivedAt: new Date(now-18*60000).toISOString() },
+    ];
+    for (const e of demoEvents) addFeedItem(e, true);
+
+    document.getElementById("connectingOverlay").style.display = "none";
+    document.getElementById("dashboard").style.display = "grid";
+  });
+
+  boot();
+</script>
+</body>
+</html>
